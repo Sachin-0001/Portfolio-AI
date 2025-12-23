@@ -11,9 +11,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Connect to backend RAG API
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-    const response = await fetch(`${backendUrl}/api/chat`, {
+    // Use Python serverless function
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'http://localhost:3000';
+    
+    const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
