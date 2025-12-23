@@ -168,8 +168,7 @@ Answer:"""
                     'data': self.portfolio_data.get('projects', [])
                 }
             }
-        
-        # If asking about skills
+    
         if any(keyword in query_lower for keyword in ['skills', 'technologies', 'tech stack', 'what can you do', 'what do you know', 'programming languages']):
             return {
                 'response': "Here are my technical skills:",
@@ -180,7 +179,7 @@ Answer:"""
                 }
             }
         
-        # If asking about achievements
+    
         if any(keyword in query_lower for keyword in ['achievements', 'accomplishments', 'awards', 'won', 'competitions', 'hackathon']):
             return {
                 'response': "Here are my achievements:",
@@ -191,7 +190,7 @@ Answer:"""
                 }
             }
         
-        # If asking about experience
+
         if any(keyword in query_lower for keyword in ['experience', 'work', 'job', 'internship', 'where have you worked', 'companies']):
             return {
                 'response': "Here's my professional experience:",
@@ -202,7 +201,6 @@ Answer:"""
                 }
             }
         
-        # If asking about socials/contact
         if any(keyword in query_lower for keyword in ['social', 'contact', 'github', 'linkedin', 'twitter', 'reach', 'connect']):
             return {
                 'response': "You can connect with me on:",
@@ -213,11 +211,9 @@ Answer:"""
                 }
             }
         
-        # For other queries, use RAG
-        # Retrieve relevant documents
+
         relevant_docs = self.retrieve_context(user_query, top_k=5)
         
-        # Generate response
         response = self.generate_response(user_query, relevant_docs)
         
         return {
