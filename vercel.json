@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "frontend/api/**/*.py": {
-      "runtime": "python3.9"
-    }
-  }
-}

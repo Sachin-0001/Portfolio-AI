@@ -5,6 +5,9 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class PortfolioRAG:
     def __init__(self, portfolio_data_path: str):
@@ -22,7 +25,7 @@ class PortfolioRAG:
         
     def _load_portfolio_data(self) -> Dict:
         """Load portfolio data from JSON file"""
-        with open(self.portfolio_data_path, 'r') as f:
+        with open(self.portfolio_data_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def _create_documents(self) -> List[Dict]:
@@ -52,7 +55,7 @@ class PortfolioRAG:
         for exp in self.portfolio_data.get('experience', []):
             doc = {
                 'type': 'experience',
-                'content': f"Company: {exp['company']}\nRole: {exp['role']}\nStart Date: {exp['start_date']}\nDescription: {exp['description']}",
+                'content': f"Company: {exp['company']}\nRole: {exp['role']}\nStart Date: {exp['start_date']}\nEnd Date: {exp.get('end_date', 'Present')}\nDescription: {exp['description']}",
                 'metadata': exp
             }
             documents.append(doc)
@@ -98,10 +101,13 @@ class PortfolioRAG:
         query_embedding = self.embedding_model.encode([query])
         
         # Search in FAISS
-        distances, indices = self.index.search(np.array(query_embedding).astype('float32'), top_k)
+        distances, indices = self.index.search(
+            np.array(query_embedding).astype('float32'), 
+            min(top_k, len(self.doc_store))
+        )
         
         # Get relevant documents
-        relevant_docs = [self.doc_store[idx] for idx in indices[0]]
+        relevant_docs = [self.doc_store[idx] for idx in indices[0] if idx < len(self.doc_store)]
         return relevant_docs
     
     def generate_response(self, query: str, context_docs: List[Dict]) -> str:
@@ -109,7 +115,7 @@ class PortfolioRAG:
         # Prepare context
         context = "\n\n".join([doc['content'] for doc in context_docs])
         
-        # Create prompt
+        # Create prompt with explicit formatting instructions
         prompt = f"""You are an AI assistant representing Sachin's portfolio. Use the following context to answer the user's question in a friendly, informative, and engaging manner.
 
 Context:
@@ -117,18 +123,39 @@ Context:
 
 User Question: {query}
 
-Instructions:
-- Provide accurate information based on the context
-- Be enthusiastic and professional
-- If asked about projects, highlight key features and technologies
-- If asked about skills, provide a comprehensive list
-- If asked about experience, provide details about roles and responsibilities
-- If asked about achievements, showcase accomplishments with pride
-- If the question cannot be answered from the context, politely say so and offer to help with something else
-- Keep responses concise but informative
-- Use markdown formatting for better readability when appropriate
+CRITICAL FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
+1. Start with a main header using ## followed by an emoji (e.g., ## 🚀 Hiring Sachin)
+2. After the header, add a blank line, then write an engaging paragraph
+3. Use ### for subsections with emojis (e.g., ### 📋 Contact Information)
+4. Always add a blank line after headers before content
+5. Use **bold text** for key terms and important information
+6. Use bullet points (- ) for lists, with blank lines before and after the list
+7. Add emojis throughout (🚀 💡 ⚡ 🎯 🏆 💻 🔧 🌟 ✨ 📊 🎨 📧 🌐 etc.)
+8. Use > for blockquotes when highlighting achievements
+9. Always add blank lines between different sections
+10. For inline code or technical terms, use backticks: `React`
 
-Answer:"""
+Example format (copy this structure exactly):
+
+## 🚀 Hiring Sachin
+
+To hire Sachin, you can follow these steps, highlighting his **technical skills** and *excellent work experience*.
+
+### 📋 Contact Information
+
+Visit his **LinkedIn** profile: [link here]
+
+Check out his **GitHub** repository: [link here]
+
+### 💡 Additional Information
+
+Sachin has a strong background in **programming languages** such as Python, Java, C++, JavaScript, and TypeScript.
+
+He is also experienced in **frameworks and libraries** like React, Next.js, Tailwind CSS, and MongoDB.
+
+His expertise in **Machine Learning, LLMs, NLP, RAG, FAISS**, and **Streamlit** makes him a valuable asset to any team.
+
+Now answer the question with this exact formatting style, ensuring blank lines between all sections:"""
 
         # Generate response using Groq
         try:
@@ -136,7 +163,36 @@ Answer:"""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful AI assistant representing Sachin's portfolio. You provide accurate, friendly, and engaging responses about Sachin's projects, skills, experience, and achievements."
+                        "content": """You are a helpful AI assistant representing Sachin's portfolio. 
+
+CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
+1. Always start with ## followed by emoji and title (e.g., ## 🚀 My Skills)
+2. Add a BLANK LINE after every header before content
+3. Use ### for subheaders with emojis (e.g., ### 💻 Technical Stack)
+4. Use **bold** for ALL important terms, skills, and key information
+5. Add relevant emojis throughout (🚀 💡 ⚡ 🎯 🏆 💻 🔧 🌟 ✨ 📊 🎨 🎓 📱 🌐 📧 etc.)
+6. Use - for bullet points, with blank lines before and after lists
+7. Always add BLANK LINES between sections and paragraphs
+8. For inline technical terms, use backticks: `React`, `Python`
+9. Use > for blockquotes when quoting or highlighting
+10. Write in short, clear paragraphs with blank lines between them
+
+STRUCTURE EXAMPLE:
+## 🚀 Title
+
+First paragraph with **bold terms** here.
+
+### 📋 Subsection
+
+Another paragraph with **important info**.
+
+- First bullet point
+- Second bullet point
+- Third bullet point
+
+Next paragraph continues here.
+
+You provide accurate, friendly, and engaging responses about Sachin's projects, skills, experience, and achievements."""
                     },
                     {
                         "role": "user",
@@ -144,15 +200,16 @@ Answer:"""
                     }
                 ],
                 model="llama-3.3-70b-versatile",
-                temperature=0.7,
+                temperature=0.3,
                 max_tokens=1000,
             )
             
             return chat_completion.choices[0].message.content
         
         except Exception as e:
-            return f"I apologize, but I encountered an error processing your request. Please try again. Error: {str(e)}"
-    
+            print(f"Error generating response: {str(e)}")
+            return f"## ⚠️ Error\n\nI apologize, but I encountered an error processing your request. Please try again.\n\n*Error details: {str(e)}*"
+
     def query(self, user_query: str) -> Dict:
         """Main query method - retrieves context and generates response"""
         # Check if query is about specific topics that need special formatting
@@ -161,7 +218,7 @@ Answer:"""
         # If asking about all projects, return all projects
         if any(keyword in query_lower for keyword in ['all projects', 'show projects', 'list projects', 'your projects', 'what projects', 'tell me about your projects']):
             return {
-                'response': "Here are all my projects:",
+                'response': "## 🚀 My Projects\n\nHere are all the projects I've worked on:",
                 'sources': [],
                 'structured_data': {
                     'type': 'projects',
@@ -171,7 +228,7 @@ Answer:"""
     
         if any(keyword in query_lower for keyword in ['skills', 'technologies', 'tech stack', 'what can you do', 'what do you know', 'programming languages']):
             return {
-                'response': "Here are my technical skills:",
+                'response': "## 💻 My Technical Skills\n\nHere's my comprehensive skill set:",
                 'sources': [],
                 'structured_data': {
                     'type': 'skills',
@@ -179,10 +236,9 @@ Answer:"""
                 }
             }
         
-    
         if any(keyword in query_lower for keyword in ['achievements', 'accomplishments', 'awards', 'won', 'competitions', 'hackathon']):
             return {
-                'response': "Here are my achievements:",
+                'response': "## 🏆 My Achievements\n\nHere are some of my notable accomplishments:",
                 'sources': [],
                 'structured_data': {
                     'type': 'achievements',
@@ -190,10 +246,9 @@ Answer:"""
                 }
             }
         
-
         if any(keyword in query_lower for keyword in ['experience', 'work', 'job', 'internship', 'where have you worked', 'companies']):
             return {
-                'response': "Here's my professional experience:",
+                'response': "## 💼 My Professional Experience\n\nHere's an overview of my work history:",
                 'sources': [],
                 'structured_data': {
                     'type': 'experience',
@@ -201,9 +256,9 @@ Answer:"""
                 }
             }
         
-        if any(keyword in query_lower for keyword in ['social', 'contact', 'github', 'linkedin', 'twitter', 'reach', 'connect']):
+        if any(keyword in query_lower for keyword in ['social', 'contact', 'github', 'linkedin', 'twitter', 'reach', 'connect', 'find you']):
             return {
-                'response': "You can connect with me on:",
+                'response': "## 🌐 Connect With Me\n\nYou can reach me on these platforms:",
                 'sources': [],
                 'structured_data': {
                     'type': 'socials',
@@ -211,7 +266,20 @@ Answer:"""
                 }
             }
         
-
+        if any(keyword in query_lower for keyword in ['resume', 'cv', 'curriculum vitae', 'download resume', 'your resume', 'see resume', 'view resume']):
+            return {
+                'response': "## 📄 My Resume\n\nYou can download my resume to learn more about my professional background, skills, and experience.",
+                'sources': [],
+                'structured_data': {
+                    'type': 'resume',
+                    'data': {
+                        'filename': 'Sachin.pdf',
+                        'url': '/Sachin.pdf'
+                    }
+                }
+            }
+        
+        # For other queries, use RAG
         relevant_docs = self.retrieve_context(user_query, top_k=5)
         
         response = self.generate_response(user_query, relevant_docs)

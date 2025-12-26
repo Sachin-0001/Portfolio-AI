@@ -2,45 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { message } = await request.json();
-
-    if (!message || message.trim() === '') {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      );
-    }
-
-    // Use Python serverless function
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000';
+    const body = await request.json();
     
-    const response = await fetch(`${baseUrl}/api/chat`, {
+    // Get backend URL from environment or use default
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    
+    // Forward request to backend
+    const response = await fetch(`${backendUrl}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Backend API error');
+      const error = await response.text();
+      return NextResponse.json(
+        { error: 'Backend request failed', details: error },
+        { status: response.status }
+      );
     }
 
     const data = await response.json();
-    return NextResponse.json({ 
-      response: data.response,
-      sources: data.sources || [],
-      structured_data: data.structured_data || null
-    });
-
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Chat API error:', error);
+    console.error('API route error:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to process request',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     );
   }
