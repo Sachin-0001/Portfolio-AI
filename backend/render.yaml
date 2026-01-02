@@ -4,6 +4,7 @@ services:
     env: python
     region: oregon  # or choose your preferred region
     plan: free  # or starter for better performance
+    rootDir: ./backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
