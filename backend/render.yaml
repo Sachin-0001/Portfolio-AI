@@ -5,7 +5,7 @@ services:
     region: oregon  # or choose your preferred region
     plan: free  # or starter for better performance
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: python3 main.py
     envVars:
       - key: GROQ_API_KEY
         sync: false
