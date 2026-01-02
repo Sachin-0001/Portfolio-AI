@@ -57,6 +57,11 @@ async def chat(request: ChatRequest):
             detail=f'An error occurred processing your request: {str(e)}'
         )
 
+@app.get('/')
+async def root():
+    """Root endpoint"""
+    return {'message': 'Portfolio AI API is running', 'status': 'healthy'}
+
 @app.get('/api/health')
 async def health():
     """Health check endpoint"""

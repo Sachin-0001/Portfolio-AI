@@ -2,10 +2,16 @@ services:
   - type: web
     name: portfolio-ai-backend
     env: python
-    buildCommand: pip install -r requirements.txt
+    region: oregon  # or choose your preferred region
+    plan: free  # or starter for better performance
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: GROQ_API_KEY
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: TRANSFORMERS_CACHE
+        value: /opt/render/.cache
+      - key: HF_HOME
+        value: /opt/render/.cache
