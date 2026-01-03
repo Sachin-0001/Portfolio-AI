@@ -128,7 +128,7 @@ CRITICAL FORMATTING INSTRUCTIONS - FOLLOW EXACTLY:
 8. Use > for blockquotes when highlighting achievements
 9. Always add blank lines between different sections
 10. For inline code or technical terms, use backticks: `React`
-
+11. If any general question is asked ansewer it either from the web or your knowledge base and then try to connect it to Sachin's skills or projects
 Example format (copy this structure exactly):
 
 ## 🚀 Hiring Sachin

@@ -22,10 +22,40 @@ export default function Chatbot() {
   const [isLoading, setIsLoading] = useState(false);
   const [displayedText, setDisplayedText] = useState('');
   const [showInitialMessage, setShowInitialMessage] = useState(true);
+  const [isWakingBackend, setIsWakingBackend] = useState(false);
+  const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const initialMessage = "What do you wish to learn about me today?";
+  
+  const techFacts = [
+    "The first computer bug was an actual moth trapped in a Harvard Mark II computer in 1947.",
+    "Python was named after the comedy group Monty Python, not the snake.",
+    "The first 1GB hard drive was released in 1980 and weighed over 500 pounds.",
+    "JavaScript was created in just 10 days by Brendan Eich in 1995.",
+    "The first domain name ever registered was Symbolics.com on March 15, 1985.",
+    "There are over 700 programming languages in use today.",
+    "The term 'debugging' came from removing actual insects from early computers.",
+    "Google processes over 8.5 billion searches per day.",
+    "The average developer writes about 50-100 lines of code per day.",
+    "Git was created by Linus Torvalds in just two weeks.",
+    "The '@' symbol in email addresses was chosen in 1971 by Ray Tomlinson.",
+    "React was developed by Facebook and released to the public in 2013.",
+    "Docker containers share the host OS kernel, making them more efficient than VMs.",
+    "TypeScript is a superset of JavaScript that adds static typing.",
+    "The term 'cloud computing' was first used in 1996.",
+  ];
+
+  // Rotate tech facts while backend is waking up
+  useEffect(() => {
+    if (isWakingBackend) {
+      const interval = setInterval(() => {
+        setCurrentFactIndex((prev) => (prev + 1) % techFacts.length);
+      }, 4000); // Change fact every 4 seconds
+      return () => clearInterval(interval);
+    }
+  }, [isWakingBackend]);
 
   // Typing animation for initial message
   useEffect(() => {
@@ -94,6 +124,7 @@ export default function Chatbot() {
     // Add user message
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
+    setIsWakingBackend(true); // Show backend waking loader
 
     try {
       // Call the backend API
@@ -104,6 +135,8 @@ export default function Chatbot() {
         },
         body: JSON.stringify({ message: userMessage }),
       });
+
+      setIsWakingBackend(false); // Hide loader once response is received
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -121,6 +154,7 @@ export default function Chatbot() {
         displayedContent: '',
       }]);
     } catch (error) {
+      setIsWakingBackend(false); // Hide loader on error
       console.error('Error calling API:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -140,6 +174,76 @@ export default function Chatbot() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 via-zinc-950 to-rose-950 relative overflow-hidden" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+      {/* Backend Waking Loader with Floating Tech Facts */}
+      {isWakingBackend && (
+        <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-900 via-zinc-950 to-rose-950 flex items-center justify-center backdrop-blur-sm">
+          {/* Animated background elements */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl animate-pulse"></div>
+            <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+            <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-rose-400/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+          </div>
+
+          <div className="relative max-w-2xl mx-auto px-6 text-center space-y-8">
+            {/* Animated loading icon */}
+            <div className="relative inline-block">
+              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-full blur-2xl opacity-60 animate-pulse"></div>
+              <div className="relative w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-rose-500 via-orange-500 to-rose-600 flex items-center justify-center shadow-2xl">
+                <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+              </div>
+            </div>
+
+            {/* Loading text */}
+            <div className="space-y-3">
+              <h2 className="text-2xl md:text-3xl font-semibold bg-gradient-to-r from-rose-400 via-orange-400 to-rose-500 bg-clip-text text-transparent">
+                Waking up the backend...
+              </h2>
+              <p className="text-gray-400 text-sm">
+                This may take up to 60 seconds on first request
+              </p>
+            </div>
+
+            {/* Tech fact card with animation */}
+            <div className="relative group animate-fade-in" key={currentFactIndex}>
+              <div className="absolute inset-0 bg-gradient-to-r from-rose-500/20 to-orange-500/20 rounded-2xl blur-xl"></div>
+              <div className="relative backdrop-blur-xl bg-slate-800/50 border border-rose-500/30 rounded-2xl p-6 shadow-2xl">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-lg">
+                    💡
+                  </div>
+                  <div className="text-left flex-1">
+                    <h3 className="text-rose-300 font-semibold text-sm mb-2">Did you know?</h3>
+                    <p className="text-gray-100 text-base leading-relaxed">
+                      {techFacts[currentFactIndex]}
+                    </p>
+                  </div>
+                </div>
+                {/* Progress indicator dots */}
+                <div className="flex justify-center gap-1.5 mt-4">
+                  {techFacts.slice(0, 5).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all ${
+                        idx === currentFactIndex % 5
+                          ? 'w-6 bg-gradient-to-r from-rose-400 to-orange-400'
+                          : 'w-1.5 bg-gray-600'
+                      }`}
+                    ></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Animated loading dots */}
+            <div className="flex justify-center gap-2">
+              <div className="w-3 h-3 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl animate-pulse"></div>
