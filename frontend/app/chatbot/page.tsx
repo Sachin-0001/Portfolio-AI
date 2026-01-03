@@ -412,7 +412,7 @@ export default function Chatbot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything... (Shift+Enter for new line)"
+                placeholder="Ask me anything..."
                 className="w-full backdrop-blur-xl bg-slate-800/50 border border-rose-500/30 rounded-3xl px-7 py-5 pr-16 text-white placeholder-gray-400 focus:outline-none focus:border-rose-400/50 focus:bg-slate-800/70 transition-all shadow-lg resize-none min-h-[60px] max-h-[200px]"
                 disabled={isLoading}
                 rows={1}
@@ -438,11 +438,7 @@ export default function Chatbot() {
             </div>
           </div>
           <p className="text-sm text-center text-gray-500 mt-4 leading-relaxed">
-            ChatBot can make mistakes. Please verify critical information independently through the{' '}
-            <a href="https://portfolio-henna-six-80gtc5cdsz.vercel.app/" className="text-rose-400 hover:text-rose-300 underline transition-colors font-medium">
-              legacy portfolio
-            </a>
-            .
+            2026 Sachin Suresh© All rights reserved.
           </p>
         </div>
       </div>
