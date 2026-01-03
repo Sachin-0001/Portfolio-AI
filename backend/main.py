@@ -69,9 +69,6 @@ async def health():
     """Health check endpoint"""
     return {'status': 'healthy'}
 
-# Vercel serverless handler
-handler = app
-
 if __name__ == '__main__':
     import uvicorn
     port = int(os.getenv('PORT', 8000))
