@@ -21,7 +21,9 @@ app.add_middleware(
 )
 
 # Initialize RAG system
+print("Initializing RAG system...")
 portfolio_rag = PortfolioRAG('portfolio_data.json')
+print("RAG system initialized successfully!")
 
 # Pydantic models
 class ChatRequest(BaseModel):
@@ -66,6 +68,9 @@ async def root():
 async def health():
     """Health check endpoint"""
     return {'status': 'healthy'}
+
+# Vercel serverless handler
+handler = app
 
 if __name__ == '__main__':
     import uvicorn

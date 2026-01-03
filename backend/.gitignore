@@ -68,3 +68,5 @@ logs/
 # Database
 *.db
 *.sqlite3
+.vercel
+.env*.local
