@@ -1,11 +1,11 @@
 import os
 import json
 from typing import List, Dict
-from sentence_transformers import SentenceTransformer
-import faiss
 import numpy as np
 from groq import Groq
 from dotenv import load_dotenv
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
@@ -13,15 +13,15 @@ class PortfolioRAG:
     def __init__(self, portfolio_data_path: str):
         """Initialize the RAG system with portfolio data"""
         self.portfolio_data_path = portfolio_data_path
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.vectorizer = TfidfVectorizer(max_features=500, stop_words='english')
         self.groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
         
         # Load and process portfolio data
         self.portfolio_data = self._load_portfolio_data()
         self.documents = self._create_documents()
         
-        # Create vector store
-        self.index, self.doc_store = self._create_vector_store()
+        # Create vector store using TF-IDF (lightweight)
+        self.doc_vectors = self._create_vector_store()
         
     def _load_portfolio_data(self) -> Dict:
         """Load portfolio data from JSON file"""
@@ -83,32 +83,26 @@ class PortfolioRAG:
         return documents
     
     def _create_vector_store(self):
-        """Create FAISS vector store from documents"""
-        # Generate embeddings
+        """Create TF-IDF vector store from documents (lightweight)"""
         texts = [doc['content'] for doc in self.documents]
-        embeddings = self.embedding_model.encode(texts)
-        
-        # Create FAISS index
-        dimension = embeddings.shape[1]
-        index = faiss.IndexFlatL2(dimension)
-        index.add(np.array(embeddings).astype('float32'))
-        
-        return index, self.documents
+        doc_vectors = self.vectorizer.fit_transform(texts)
+        return doc_vectors
     
     def retrieve_context(self, query: str, top_k: int = 5) -> List[Dict]:
         """Retrieve relevant documents for the query"""
-        # Encode query
-        query_embedding = self.embedding_model.encode([query])
+        # Vectorize query
+        query_vector = self.vectorizer.transform([query])
+        query_vector = self.vectorizer.transform([query])
         
-        # Search in FAISS
-        distances, indices = self.index.search(
-            np.array(query_embedding).astype('float32'), 
-            min(top_k, len(self.doc_store))
-        )
+        # Calculate similarity
+        similarities = cosine_similarity(query_vector, self.doc_vectors)[0]
+        
+        # Get top k indices
+        top_indices = np.argsort(similarities)[::-1][:min(top_k, len(self.documents))]
         
         # Get relevant documents
-        relevant_docs = [self.doc_store[idx] for idx in indices[0] if idx < len(self.doc_store)]
-        return relevant_docs
+        relevant_docs = [self.documents[idx] for idx in top_indices if similarities[idx] > 0]
+        return relevant_docs if relevant_docs else self.documents[:top_k]
     
     def generate_response(self, query: str, context_docs: List[Dict]) -> str:
         """Generate response using Groq LLM"""

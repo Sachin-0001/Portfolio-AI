@@ -20,10 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize RAG system
-print("Initializing RAG system...")
-portfolio_rag = PortfolioRAG('portfolio_data.json')
-print("RAG system initialized successfully!")
+# Initialize RAG system lazily
+portfolio_rag = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize RAG system after server starts"""
+    global portfolio_rag
+    print("Initializing RAG system...")
+    portfolio_rag = PortfolioRAG('portfolio_data.json')
+    print("RAG system initialized successfully!")
 
 # Pydantic models
 class ChatRequest(BaseModel):
@@ -38,6 +44,9 @@ class ChatResponse(BaseModel):
 async def chat(request: ChatRequest):
     """Handle chat requests from frontend"""
     try:
+        if portfolio_rag is None:
+            raise HTTPException(status_code=503, detail='AI system is still initializing, please try again in a moment')
+        
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail='No message provided')
         
