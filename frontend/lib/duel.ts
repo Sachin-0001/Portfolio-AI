@@ -35,6 +35,8 @@ export interface FighterCard {
 export interface RoundSide {
   score: number;
   evidence: string[];
+  /** Academics round only: the two parts the score is built from (grades null when none are listed). */
+  breakdown?: { grades: number | null; achievements: number };
 }
 
 export interface Round {

@@ -312,7 +312,7 @@ export default function DuelPage() {
                 <div className="relative mt-auto pt-6 sm:pt-8">
                   <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-faint">The rounds</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {['Experience', 'Projects', 'Tech arsenal', 'Open source', 'Academics & awards'].map(r => (
+                    {['Experience', 'Projects', 'Tech arsenal', 'Open source', 'Academics & achievements'].map(r => (
                       <span key={r} className="chip">
                         {r}
                       </span>

@@ -30,10 +30,19 @@ def side(score, evidence=()):
     return {'score': score, 'evidence': list(evidence)}
 
 
+def academics_side(score, evidence=(), grades=None, points=None):
+    # grades == the single achievement's points == score keeps the combined round score equal to `score`
+    # (for a fighter with no parseable CGPA and one achievement)
+    return {'grades': score if grades is None else grades,
+            'achievement_points': [{'index': 0, 'points': score}] if points is None else points,
+            'evidence': list(evidence)}
+
+
 def verdict(a_scores, b_scores, a_ev=(), b_ev=()):
     rounds = {}
     for i, (key, _, _) in enumerate(judge_mod.LLM_ROUNDS):
-        rounds[key] = {'red': side(a_scores[i], a_ev), 'blue': side(b_scores[i], b_ev), 'commentary': 'Red edges Blue.'}
+        make = academics_side if key == 'academics' else side
+        rounds[key] = {'red': make(a_scores[i], a_ev), 'blue': make(b_scores[i], b_ev), 'commentary': 'Red edges Blue.'}
     return {**rounds, 'announcer': 'In the Red corner versus the Blue corner!', 'red_learn_from_blue': 'Red learns', 'blue_learn_from_red': 'Blue learns'}
 
 
@@ -88,6 +97,7 @@ def gh_repo(name, stars=0, fork=False, lang='Python', pushed='2026-10-01T00:00:0
 
 
 def fighter(name='Aarav Mehta', **kw):
+    kw.setdefault('achievements', ['Shortlisted, a hackathon'])
     return Fighter(name=name, headline='Engineer', **kw)
 
 
@@ -514,3 +524,87 @@ def test_history_upserts_on_identity_and_never_selects_it_for_the_wall(monkeypat
     wall_sql = calls[1][0]
     assert 'identity_hash' not in wall_sql and 'order by updated_at desc' in wall_sql
     assert 'duel_count' in wall_sql and 'updated_at' in wall_sql
+
+
+# ---------- academics: grades and achievements ----------
+
+@pytest.mark.parametrize('text, points', [
+    ('8.86/10.0', 78), ('8.86 / 10.0', 78), ('9.1/10', 83), ('CGPA 7.5/10', 50), ('3.7/4', 86),
+    ('85%', 70), ('9.7', 95), ('10/10', 100), ('4.9/10', 0), ('', None), ('Distinction', None), ('11/10', None),
+])
+def test_gpa_points_are_deterministic(text, points):
+    assert judge_mod.gpa_points(text) == points
+
+
+@pytest.mark.parametrize('points, expected', [
+    ([], 0), ([65], 65), ([65, 40, 25, 25], 73),   # 65 + (0.35*40 + 0.2*25 + 0.1*25) * 0.35 = 72.5
+    ([85, 55], 88), ([0, -5], 0), ([100, 100], 100),
+])
+def test_achievements_best_counts_fully_rest_diminish(points, expected):
+    assert judge_mod.combine_achievements(points) == expected
+
+
+def _academic_fighter(score='', achievements=()):
+    from duel.profiles import Education
+    edu = [Education(institution='X', degree='B.E.', score=score)] if score else []
+    return fighter(education=edu, achievements=list(achievements))
+
+
+def test_academics_uses_stated_cgpa_over_the_judges_guess():
+    f = _academic_fighter('9.1/10', ['Winner, Smart India Hackathon 2024'])
+    score, parts = judge_mod.academics_score({'grades': 40, 'achievement_points': [{'index': 0, 'points': 85}]}, f)
+    assert parts == {'grades': 83, 'achievements': 85} and score == round(0.4 * 83 + 0.6 * 85)
+
+
+def test_academics_without_grades_uses_achievements_only_and_ignores_bad_indexes():
+    f = _academic_fighter('', ['Runner-up, BotCraft', 'CodeChef rating 1210'])
+    side_in = {'grades': -1, 'achievement_points': [{'index': 0, 'points': 65}, {'index': 1, 'points': 40},
+                                                     {'index': 7, 'points': 99}, {'index': 0, 'points': 10}]}
+    score, parts = judge_mod.academics_score(side_in, f)
+    assert parts == {'grades': None, 'achievements': 70} and score == 70  # 65 + 0.35*40*0.35; index 7 ignored
+
+
+def test_no_achievements_listed_means_zero_achievement_points():
+    score, parts = judge_mod.academics_score({'grades': -1, 'achievement_points': [{'index': 0, 'points': 90}]}, _academic_fighter('9.5/10'))
+    assert parts == {'grades': 91, 'achievements': 0} and score == round(0.4 * 91)  # 9.5 sits 3/5 of the way from 85 to 95
+
+
+def test_achievements_can_beat_a_higher_gpa_and_breakdown_is_returned():
+    reply = verdict([60] * 4, [60] * 4)
+    # Red (challenger): CGPA 9.5, a participation certificate. Blue (Sachin, CGPA 8.86): BotCraft runner-up and more
+    reply['academics'] = {
+        'red': academics_side(0, grades=0, points=[{'index': 0, 'points': 10}]),
+        'blue': academics_side(0, grades=0, points=[{'index': i, 'points': p} for i, p in enumerate([65, 40, 25, 25])]),
+        'commentary': 'Blue wins on achievements.',
+    }
+    challenger = _academic_fighter('9.5/10', ['Participation certificate, college quiz'])
+    rng = SimpleNamespace(random=lambda: 0.1)  # challenger is Red
+    r = judge_mod.judge(FakeLLM(judge_reply=reply), challenger, sachin_fighter(DATA), model='m', fallback_model=None, rng=rng)
+    acad = next(x for x in r['rounds'] if x['key'] == 'academics')
+    assert acad['challenger']['breakdown'] == {'grades': 91, 'achievements': 10}
+    assert acad['sachin']['breakdown']['grades'] == 78  # from "8.86 / 10.0" in the portfolio data, not the judge's 0
+    assert acad['sachin']['score'] > acad['challenger']['score'] and acad['winner'] == 'sachin'
+    assert all('breakdown' not in x['challenger'] for x in r['rounds'] if x['key'] != 'academics')
+
+
+def test_judge_schema_and_prompt_ask_for_per_achievement_points():
+    side_schema = judge_mod.JUDGE_SCHEMA['properties']['academics']['properties']['red']
+    assert set(side_schema['required']) == {'grades', 'achievement_points', 'evidence'}
+    assert 'score' in judge_mod.JUDGE_SCHEMA['properties']['experience']['properties']['red']['required']
+    for phrase in ('competitive-programming', 'hackathons', 'win > runner-up', 'Never let grades leak', 'EVERY entry'):
+        assert phrase in judge_mod.JUDGE_PROMPT
+
+
+@pytest.mark.parametrize('raw, clean', [
+    ('score": "8.86/10.0"', '8.86/10.0'),
+    ('"degree": "B.Tech in Computer Science"', 'B.Tech in Computer Science'),
+    ('Winner, Smart India Hackathon 2024 (software edition).', 'Winner, Smart India Hackathon 2024 (software edition).'),
+    ('Ratio 3:1 load balancing', 'Ratio 3:1 load balancing'),
+])
+def test_evidence_quotes_lose_json_field_names(raw, clean):
+    assert judge_mod.clean_quote(raw) == clean
+
+
+def test_cleaned_quote_still_has_to_exist_in_the_profile():
+    profile = {'education': [{'score': '8.86/10.0'}]}
+    assert judge_mod.verified_evidence(['score": "8.86/10.0"', 'score": "9.9/10"'], profile) == ['8.86/10.0']

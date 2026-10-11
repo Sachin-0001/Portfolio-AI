@@ -15,10 +15,15 @@ LLM_ROUNDS = [
     ('experience', 'Experience', 'Roles, ownership and impact'),
     ('projects', 'Projects', 'Complexity, AI/ML depth, shipped work'),
     ('arsenal', 'Tech arsenal', 'Breadth backed by real use'),
-    ('academics', 'Academics & awards', 'Education, competitions, recognition'),
+    ('academics', 'Academics & achievements', 'Grades plus competitions, awards and recognition'),
 ]
 OPEN_SOURCE = ('open_source', 'Open source', 'Public GitHub footprint')
 ROUND_ORDER = ['experience', 'projects', 'arsenal', 'open_source', 'academics']
+
+# The academics round is scored in two parts and combined here, so the weighting is fixed and visible rather than
+# left to the model (which otherwise leans on the easiest thing to compare: the GPA).
+GRADES_WEIGHT = 0.4
+ACHIEVEMENTS_WEIGHT = 0.6
 
 TIE_MARGIN = 2      # round scores this close are a tie
 DRAW_MARGIN = 3     # totals this close are a draw
@@ -31,12 +36,15 @@ Score EACH fighter independently against these anchors (0-100), then compare:
 experience: 0 none · 30 club, freelance or a short internship · 50 one solid internship with shipped work · 70 several internships, or a lead/owner role with production impact · 85 full-time engineer with measurable impact · 95+ senior, multi-year, major impact.
 projects: 30 tutorials or simple CRUD apps · 50 working full-stack or ML apps · 70 deployed, with real users or real technical depth · 85 production-grade (tests, CI, scale, measured results) · 95+ widely used or research-level.
 arsenal: breadth AND depth. Skills demonstrated in experience or projects count far more than skills merely listed. 50 = a solid modern stack used in practice.
-academics: degree and grades, competitions, awards, certifications, publications. 50 = solid student record with some recognition.
+academics is scored in two parts per fighter, combined in code (do NOT give an overall academics score):
+  grades: academic performance only. 50 ≈ 7.5/10 CGPA or 75% · 70 ≈ 8.5/10 · 85 ≈ 9.2/10 or top 5% of class · 95+ ≈ 9.7+/10, rank 1 or a medal. Use -1 when no grades are stated. (Code recomputes this from the stated CGPA when it can.)
+  achievement_points: rate EVERY entry in that fighter's "achievements" list separately, one object per entry with its 0-based index. These are competitions and hackathons, awards, scholarships, competitive-programming ratings and badges, certifications, publications, patents, notable rankings. Per-entry scale: 10 participation · 25 a streak/participation badge or minor college recognition · 40 a modest competitive-programming rating, a college-level placing, or a common certification · 55 finalist or shortlisted in a large (100+ teams) or state-level event, or a strong rating · 65 runner-up / top-3 in a large or state-level event · 75 winner of a large or state-level event, or a highly selective certification · 85 national-level win or a peer-reviewed publication · 95 international award or major research recognition. Judge each entry by its RESULT (win > runner-up > finalist > shortlisted > participated) and SCALE (international > national > state > college; how many competed). Never let grades leak into these points.
 
 Rules
 - Anchors are reference points, not buckets: use any integer. If one fighter is genuinely stronger in a round (e.g. a higher GPA, or winning where the other placed), their score must be higher. Tie only when they are truly equivalent.
 - Reward substance, not length or buzzwords. Identical evidence must get identical scores.
-- evidence: 1-2 short phrases copied VERBATIM from that fighter's profile that justify the score. Never paraphrase.
+- evidence: 1-2 short phrases copied VERBATIM from that fighter's profile that justify the score. Never paraphrase. For academics, when a fighter has any achievements, at least one evidence phrase must be an achievement, not the GPA.
+- academics commentary must mention achievements, not just grades, whenever either fighter has any.
 - commentary: one punchy, good-natured sentence, like a fight commentator, naming who took the round and why.
 - announcer: one fun ring-announcer line introducing the bout, based on both profiles.
 - red_learn_from_blue / blue_learn_from_red: one specific sentence each on what one could learn from the other.
@@ -59,11 +67,32 @@ _ROUND = {
     'required': ['red', 'blue', 'commentary'],
     'additionalProperties': False,
 }
+_ACHIEVEMENT_POINTS = {
+    'type': 'object',
+    'properties': {'index': {'type': 'integer'}, 'points': {'type': 'integer'}},
+    'required': ['index', 'points'],
+    'additionalProperties': False,
+}
+_ACADEMICS_SIDE = {
+    'type': 'object',
+    'properties': {
+        'grades': {'type': 'integer'},
+        'achievement_points': {'type': 'array', 'items': _ACHIEVEMENT_POINTS},
+        'evidence': {'type': 'array', 'items': {'type': 'string'}},
+    },
+    'required': ['grades', 'achievement_points', 'evidence'],
+    'additionalProperties': False,
+}
+_ACADEMICS_ROUND = {**_ROUND, 'properties': {'red': _ACADEMICS_SIDE, 'blue': _ACADEMICS_SIDE, 'commentary': {'type': 'string'}}}
 # Flat on purpose: with a nested "rounds" object the model sometimes flattens it anyway and fails validation
 _EXTRAS = {'announcer': {'type': 'string'}, 'red_learn_from_blue': {'type': 'string'}, 'blue_learn_from_red': {'type': 'string'}}
 JUDGE_SCHEMA = {
     'type': 'object',
-    'properties': {'announcer': _EXTRAS['announcer'], **{key: _ROUND for key, _, _ in LLM_ROUNDS}, **_EXTRAS},
+    'properties': {
+        'announcer': _EXTRAS['announcer'],
+        **{key: (_ACADEMICS_ROUND if key == 'academics' else _ROUND) for key, _, _ in LLM_ROUNDS},
+        **_EXTRAS,
+    },
     'required': ['announcer', *(key for key, _, _ in LLM_ROUNDS), 'red_learn_from_blue', 'blue_learn_from_red'],
     'additionalProperties': False,
 }
@@ -78,13 +107,22 @@ def _norm(text: str) -> str:
     return re.sub(r'\s+', ' ', re.sub(r'[^\w\s%.+#-]', ' ', text.lower())).strip()
 
 
+# The judge sees profiles as JSON, so it sometimes quotes a field name too: 'score": "8.86/10.0"'
+_JSON_KEY_PREFIX = re.compile(r'^\s*["\']?\w+["\']?\s*:\s*')
+
+
+def clean_quote(q: str) -> str:
+    q = _JSON_KEY_PREFIX.sub('', q or '').strip()
+    return q.strip('"\' ,').strip()
+
+
 def verified_evidence(quotes: List[str], profile: Dict, limit: int = 2) -> List[str]:
     """Keep only quotes that really occur in the profile (allowing light punctuation/case drift), and never one
     that reads like an injection, so a planted line can't be shown back to the visitor as "evidence"."""
     haystack = _norm(json.dumps(profile, ensure_ascii=False))
     words = set(haystack.split())
     kept = []
-    for q in quotes:
+    for q in map(clean_quote, quotes):
         nq = _norm(q)
         if len(nq) < 3 or is_suspicious(q):
             continue
@@ -164,6 +202,75 @@ def open_source_round(challenger: Fighter, sachin: Fighter) -> Dict:
             [_github_line(first, challenger.github), _github_line('Sachin', sachin.github)]
         ) + '.'
     return _round(OPEN_SOURCE, c, [], s, [], commentary)
+
+
+# CGPA on a 10-point scale -> grades points, interpolated between the rubric's anchors
+_GPA_ANCHORS = [(5.0, 0), (6.5, 30), (7.5, 50), (8.5, 70), (9.2, 85), (9.7, 95), (10.0, 100)]
+_FRACTION = re.compile(r'(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)')
+_PERCENT = re.compile(r'(\d+(?:\.\d+)?)\s*%')
+_NUMBER = re.compile(r'\d+(?:\.\d+)?')
+# Best achievement counts in full; the next ones add diminishing credit toward the headroom left below 100
+_EXTRA_WEIGHTS = (0.35, 0.2, 0.1, 0.05)
+
+
+def gpa_points(score_text: str) -> Optional[int]:
+    """'8.86/10.0', '3.7/4', '85%', '9.1' -> grades points. None when there's no readable grade."""
+    text = (score_text or '').strip()
+    if m := _FRACTION.search(text):
+        value, scale = float(m.group(1)), float(m.group(2))
+    elif m := _PERCENT.search(text):
+        value, scale = float(m.group(1)), 100.0
+    elif m := _NUMBER.search(text):
+        value = float(m.group(0))
+        scale = 4.0 if value <= 4.0 else 10.0 if value <= 10.0 else 100.0
+    else:
+        return None
+    if scale <= 0 or not 0 < value <= scale:
+        return None
+    ten = value / scale * 10
+    if ten <= _GPA_ANCHORS[0][0]:
+        return 0
+    for (x0, y0), (x1, y1) in zip(_GPA_ANCHORS, _GPA_ANCHORS[1:]):
+        if ten <= x1:
+            return round(y0 + (ten - x0) / (x1 - x0) * (y1 - y0))
+    return 100
+
+
+def fighter_grades(f: Fighter) -> Optional[int]:
+    for edu in f.education:
+        if (points := gpa_points(edu.score)) is not None:
+            return points
+    return None
+
+
+def combine_achievements(points: List[int]) -> int:
+    ranked = sorted((p for p in points if p > 0), reverse=True)
+    if not ranked:
+        return 0
+    best = ranked[0]
+    extra = sum(w * p for w, p in zip(_EXTRA_WEIGHTS, ranked[1:]))
+    return min(100, round(best + extra * (100 - best) / 100))
+
+
+def academics_score(side: Dict, fighter: Fighter) -> Tuple[int, Dict]:
+    """Grades from the stated CGPA when parseable (else the judge's estimate); achievements from per-entry points.
+    Missing grades drop out instead of counting as zero."""
+    by_index: Dict[int, int] = {}
+    for item in side.get('achievement_points') or []:
+        i = item.get('index')
+        if isinstance(i, int) and 0 <= i < len(fighter.achievements):
+            by_index[i] = max(by_index.get(i, 0), _clamp(item.get('points')))
+    achievements = combine_achievements(list(by_index.values()))
+
+    grades = fighter_grades(fighter)
+    if grades is None:
+        raw_grades = side.get('grades')
+        grades = _clamp(raw_grades) if isinstance(raw_grades, (int, float)) and raw_grades >= 0 else None
+    if grades is None:
+        score = achievements
+    else:
+        score = round(GRADES_WEIGHT * grades + ACHIEVEMENTS_WEIGHT * achievements)
+    return score, {'grades': grades, 'achievements': achievements}
 
 
 def _round(meta: Tuple[str, str, str], c_score: int, c_ev: List[str], s_score: int, s_ev: List[str], commentary: str) -> Dict:
@@ -246,14 +353,21 @@ def judge(
     rounds = {}
     for meta in LLM_ROUNDS:
         r = raw[meta[0]]
+        if meta[0] == 'academics':
+            (c_score, c_parts), (s_score, s_parts) = academics_score(r[c_side], challenger), academics_score(r[s_side], sachin)
+        else:
+            c_score, s_score, c_parts, s_parts = _clamp(r[c_side]['score']), _clamp(r[s_side]['score']), None, None
         rounds[meta[0]] = _round(
             meta,
-            _clamp(r[c_side]['score']),
+            c_score,
             verified_evidence(r[c_side]['evidence'], c_view),
-            _clamp(r[s_side]['score']),
+            s_score,
             verified_evidence(r[s_side]['evidence'], s_view),
             _rename(r['commentary'], a_name, b_name),
         )
+        if c_parts:
+            rounds[meta[0]]['challenger']['breakdown'] = c_parts
+            rounds[meta[0]]['sachin']['breakdown'] = s_parts
     rounds['open_source'] = open_source_round(challenger, sachin)
     ordered = [rounds[k] for k in ROUND_ORDER]
 

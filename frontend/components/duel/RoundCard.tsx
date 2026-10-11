@@ -18,6 +18,11 @@ function SideScore({ round, side, name }: { round: Round; side: Side; name: stri
       <div className="mt-2">
         <ScoreBar value={s.score} color={SIDE_COLOR[side]} align={mirror ? 'right-sm' : 'left'} dim={lost} />
       </div>
+      {s.breakdown && (
+        <p className="mt-2 font-mono text-[11px] text-faint">
+          Grades {s.breakdown.grades ?? 'not listed'} · Achievements {s.breakdown.achievements}
+        </p>
+      )}
       {s.evidence.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {s.evidence.map(e => (
