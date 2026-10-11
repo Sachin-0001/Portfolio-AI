@@ -113,6 +113,71 @@
       "npm": "https://www.npmjs.com/package/unbindai"
     },
     {
+      "id": 10,
+      "name": "Solvent",
+      "tagline": "AI finance-controller pipeline",
+      "description": "An AI finance controller built for the Razorpay AI Buildathon (Track 04). It reconciles merchant settlements across Razorpay, ledger and bank data, classifies GST treatment, forecasts settlements and cash position, and answers questions through a retrieval-backed agent.",
+      "highlights": [
+        "Three-tier reconciliation cascade (exact → fuzzy → LLM on the residual only) scoring precision 1.00 and recall 1.00 against a held-out 250-transaction ground truth; code resolves 193 of 213 matches and the LLM tier the remaining 20.",
+        "Rule-first GST classifier with an LLM fallback for edge cases. Every match, exception and classification carries its reasoning to the dashboard, and nothing is auto-closed without human review.",
+        "Trained settlement-timing and deduction regressors (MAE 0.67 days and 0.0037) plus next-day GMV, refund and settlement forecasts feeding a deterministic cash-position engine, with a Q&A agent over sentence-transformers embeddings and Groq."
+      ],
+      "tags": [
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "Groq",
+        "scikit-learn",
+        "sentence-transformers",
+        "Next.js"
+      ],
+      "date": "Sep 2026",
+      "link": "https://solvent-ebon.vercel.app",
+      "github": "https://github.com/Sachin-0001/Solvent"
+    },
+    {
+      "id": 11,
+      "name": "FundBridge",
+      "tagline": "AI lending marketplace for businesses",
+      "description": "An AI-powered fintech marketplace connecting businesses seeking loans with banks looking for qualified borrowers, through eligibility scoring, bank matching and funding recommendations.",
+      "highlights": [
+        "FastAPI and SQLAlchemy 2.0 backend on PostgreSQL with Alembic migrations, layered into API, repository and model modules for businesses, banks, applications and matches.",
+        "Next.js and TypeScript frontend built with shadcn/ui, Framer Motion and Zod; Groq powers the AI recommendations."
+      ],
+      "tags": [
+        "Next.js",
+        "TypeScript",
+        "FastAPI",
+        "SQLAlchemy",
+        "PostgreSQL",
+        "Groq"
+      ],
+      "date": "Jun 2026",
+      "link": "https://fundbridge-theta.vercel.app/",
+      "github": "https://github.com/Sachin-0001/FundBridge"
+    },
+    {
+      "id": 12,
+      "name": "FinSight",
+      "tagline": "RL environment for financial document analysis",
+      "description": "An OpenEnv, Gym-style environment for training RL agents on financial document analysis: anomaly detection, KPI extraction and compliance risk assessment.",
+      "highlights": [
+        "Three tasks of rising difficulty (anomaly classification, KPI extraction, compliance assessment) scored by deterministic programmatic graders, with no LLM-as-judge.",
+        "Shaped rewards with partial credit, a confidence-calibration bonus and illegal-action and step-efficiency penalties, served over a typed HTTP reset/step/state API.",
+        "Containerised with Docker Compose, Kubernetes manifests and a Jenkins pipeline, plus a baseline LLM agent that runs against any OpenAI-compatible endpoint."
+      ],
+      "tags": [
+        "Python",
+        "Reinforcement Learning",
+        "OpenEnv",
+        "Docker",
+        "Kubernetes"
+      ],
+      "date": "May 2026",
+      "github": "https://github.com/Sachin-0001/FinSight",
+      "link": "https://github.com/Sachin-0001/FinSight"
+    },
+    {
       "id": 3,
       "name": "RagSum",
       "tagline": "RAG chatbot with a self-built summarizer",

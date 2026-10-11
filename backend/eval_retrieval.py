@@ -44,6 +44,12 @@ CASES: List[Tuple[str, List[str]]] = [
     ("Built anything for Discord?", ["achievement:runner-up-botcraft"]),
     ("How can I get in touch with you?", ["socials", "profile"]),
     ("Do you have a Kaggle account?", ["socials"]),
+    ("Have you built anything for bank reconciliation?", ["project:solvent"]),
+    ("Did you take part in a buildathon?", ["project:solvent"]),
+    ("Have you trained forecasting models?", ["project:solvent"]),
+    ("A marketplace matching borrowers with banks", ["project:fundbridge", "experience:capmob-financial-services"]),
+    ("Have you built a reinforcement learning environment?", ["project:finsight"]),
+    ("How do you reward an agent without an LLM judge?", ["project:finsight"]),
     # Exact-term lookups (added after the first run, to test lexical matching on names and acronyms)
     ("Semgrep and Gitleaks", ["experience:capmob-financial-services", "project:unbind"]),
     ("HMAC-SHA256", ["project:unbind"]),
