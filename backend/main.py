@@ -1,8 +1,13 @@
-from fastapi import FastAPI, HTTPException
+import json
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Literal
 from rag_engine import PortfolioRAG
+from duel.pdf import MAX_BYTES
+from duel.service import DuelService, RateLimiter
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -12,13 +17,16 @@ load_dotenv()
 
 # Initialize RAG system lazily
 portfolio_rag = None
+duel_service = None
+duel_limiter = RateLimiter(limit=5, window_s=600)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize RAG system after server starts"""
-    global portfolio_rag
+    global portfolio_rag, duel_service
     print("Initializing RAG system...")
     portfolio_rag = PortfolioRAG('portfolio_data.json')
+    duel_service = DuelService(portfolio_rag.portfolio_data, portfolio_rag.llm)
     print("RAG system initialized successfully!")
     yield
 
@@ -76,6 +84,30 @@ def chat(request: ChatRequest):
             status_code=500,
             detail=f'An error occurred processing your request: {str(e)}'
         )
+
+def _client_key(request: Request) -> str:
+    # The Next.js proxy forwards the visitor's address; spoofable, which is fine for a soft limit
+    forwarded = request.headers.get('x-forwarded-for', '')
+    return forwarded.split(',')[0].strip() or (request.client.host if request.client else 'unknown')
+
+
+@app.post('/api/duel')
+async def duel(request: Request, file: UploadFile = File(...), github: str = Form('')):
+    """Streams NDJSON progress events, ending with a 'done' (result) or 'error' event."""
+    if duel_service is None:
+        raise HTTPException(status_code=503, detail='AI system is still initializing, please try again in a moment')
+    if not duel_limiter.allow(_client_key(request)):
+        raise HTTPException(status_code=429, detail='Easy, champ. That is a lot of duels; try again in a few minutes.')
+
+    data = await file.read(MAX_BYTES + 1)  # read one byte past the cap so oversize files are detected
+    await file.close()
+
+    def events():
+        for event in duel_service.run(data, github[:60]):
+            yield json.dumps(event, ensure_ascii=False) + '\n'
+
+    return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store'})
+
 
 @app.get('/')
 async def root():

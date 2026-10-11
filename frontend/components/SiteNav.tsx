@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/#projects', label: 'Projects' },
   { href: '/#stack', label: 'Stack' },
   { href: '/#achievements', label: 'Achievements' },
+  { href: '/duel', label: 'Duel me' },
 ];
 
 export default function SiteNav({ resumeUrl }: { resumeUrl: string }) {

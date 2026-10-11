@@ -276,6 +276,13 @@ export default function Chatbot() {
                   </button>
                 ))}
               </div>
+              <Link
+                href="/duel"
+                className="mt-6 inline-flex items-center gap-1.5 text-sm text-faint transition-colors hover:text-fg"
+              >
+                Or skip the questions: <span className="text-accent">challenge me to a résumé duel</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           )}
 

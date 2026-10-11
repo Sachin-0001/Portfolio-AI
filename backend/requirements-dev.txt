@@ -2,3 +2,5 @@
 pytest==8.3.4
 # only for the TF-IDF baseline in eval_retrieval.py
 scikit-learn==1.3.2
+# synthetic résumé PDFs for tests
+reportlab==4.2.5

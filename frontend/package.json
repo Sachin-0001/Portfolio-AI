@@ -10,6 +10,7 @@
     "sync:data": "node -e \"require('fs').copyFileSync('../backend/portfolio_data.json','data/portfolio.json')\""
   },
   "dependencies": {
+    "html-to-image": "1.11.13",
     "next": "16.0.10",
     "react": "19.2.1",
     "react-dom": "19.2.1",

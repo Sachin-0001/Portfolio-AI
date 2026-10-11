@@ -375,6 +375,35 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ───────────── Duel teaser ───────────── */}
+        <section id="duel" className="pt-24 md:pt-32">
+          <Reveal>
+            <Link href="/duel" className="card card-hover group relative block overflow-hidden p-8 md:p-12">
+              <div aria-hidden className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full bg-signal opacity-15 blur-3xl" />
+              <div aria-hidden className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-accent opacity-15 blur-3xl" />
+              <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+                <div className="max-w-xl">
+                  <p className="font-mono text-xs uppercase tracking-[0.2em] text-faint">
+                    <span className="text-accent">05</span> · Portfolio duel
+                  </p>
+                  <h2 className="mt-4 text-3xl font-medium tracking-tight text-fg sm:text-4xl">
+                    Think you can <span className="font-serif italic text-accent">out-build</span> me?
+                  </h2>
+                  <p className="mt-3 text-muted">
+                    Upload your résumé. I’ll pull your GitHub and an AI panel judges us blind, round by round.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-signal font-mono text-signal">you</span>
+                  <span className="font-serif text-3xl italic text-fg">vs</span>
+                  <span className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-accent font-mono text-accent">me</span>
+                  <ArrowRight className="ml-2 h-5 w-5 text-faint transition-all group-hover:translate-x-1 group-hover:text-accent" />
+                </div>
+              </div>
+            </Link>
+          </Reveal>
+        </section>
+
         {/* ───────────── Ask CTA ───────────── */}
         <section id="ask" className="py-24 md:py-32">
           <Reveal className="card relative overflow-hidden p-8 md:p-14">
@@ -382,7 +411,7 @@ export default function Home() {
             <div aria-hidden className="glow pointer-events-none absolute -top-48 left-1/2 h-[30rem] w-[50rem] -translate-x-1/2" />
             <div className="relative mx-auto max-w-2xl text-center">
               <p className="font-mono text-xs uppercase tracking-[0.2em] text-faint">
-                <span className="text-accent">05</span> · S.A.C.H.I.N
+                <span className="text-accent">06</span> · S.A.C.H.I.N
               </p>
               <h2 className="mt-4 text-3xl font-medium tracking-tight text-fg sm:text-4xl md:text-5xl">
                 Don’t skim. <span className="font-serif italic text-accent">Ask.</span>
