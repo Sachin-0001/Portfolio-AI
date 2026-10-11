@@ -1,15 +1,28 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import List, Literal
 from rag_engine import PortfolioRAG
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(title="Portfolio AI API", version="1.0.0")
+# Initialize RAG system lazily
+portfolio_rag = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize RAG system after server starts"""
+    global portfolio_rag
+    print("Initializing RAG system...")
+    portfolio_rag = PortfolioRAG('portfolio_data.json')
+    print("RAG system initialized successfully!")
+    yield
+
+app = FastAPI(title="Portfolio AI API", version="2.0.0", lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(
@@ -20,28 +33,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize RAG system lazily
-portfolio_rag = None
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize RAG system after server starts"""
-    global portfolio_rag
-    print("Initializing RAG system...")
-    portfolio_rag = PortfolioRAG('portfolio_data.json')
-    print("RAG system initialized successfully!")
-
 # Pydantic models
+class ChatTurn(BaseModel):
+    role: Literal['user', 'assistant']
+    content: str = Field(max_length=4000)
+
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=2000)
+    history: List[ChatTurn] = Field(default_factory=list, max_length=20)
+
+class Source(BaseModel):
+    id: str
+    type: str
+    title: str
 
 class ChatResponse(BaseModel):
     response: str
-    sources: list
-    structured_data: Optional[dict] = None
+    sources: List[Source]
+    cards: List[dict]
 
 @app.post('/api/chat', response_model=ChatResponse)
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """Handle chat requests from frontend"""
     try:
         if portfolio_rag is None:
@@ -50,14 +62,11 @@ async def chat(request: ChatRequest):
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail='No message provided')
         
-        # Get response from RAG system
-        result = portfolio_rag.query(request.message)
-        
-        return ChatResponse(
-            response=result['response'],
-            sources=result['sources'],
-            structured_data=result.get('structured_data')
+        result = portfolio_rag.query(
+            request.message.strip(),
+            history=[turn.model_dump() for turn in request.history],
         )
+        return ChatResponse(**result)
     
     except HTTPException:
         raise
