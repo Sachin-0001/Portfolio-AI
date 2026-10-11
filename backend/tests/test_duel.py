@@ -363,12 +363,19 @@ class FakeHistory:
 
     def __init__(self, fail=False):
         self.rows, self.fail = [], fail
+        self.keys = {}  # identity_hash -> index into rows, like the partial unique index
 
-    def record(self, row):
+    def record(self, row, identity_hash=None):
         if self.fail:
             raise RuntimeError('db down')
-        self.rows.append(row)
-        return f'id-{len(self.rows)}'
+        if identity_hash is not None and identity_hash in self.keys:
+            i = self.keys[identity_hash]
+            self.rows[i] = {**row, 'id': self.rows[i]['id'], 'duel_count': self.rows[i]['duel_count'] + 1}
+            return {'id': self.rows[i]['id'], 'rematch': True}
+        self.rows.append({**row, 'id': f'id-{len(self.rows) + 1}', 'duel_count': 1})
+        if identity_hash is not None:
+            self.keys[identity_hash] = len(self.rows) - 1
+        return {'id': self.rows[-1]['id'], 'rematch': False}
 
     def recent(self, limit=24):
         return {'enabled': True, 'duels': self.rows[:limit], 'record': {'wins': 0, 'losses': 0, 'draws': 0, 'total': len(self.rows)}}
@@ -403,7 +410,7 @@ def test_service_shares_only_when_asked():
     svc.history = history
     assert list(svc.run(build()))[-1]['result']['shared'] is None
     assert history.rows == []
-    assert list(svc.run(build(), share=True))[-1]['result']['shared'] == {'id': 'id-1'}
+    assert list(svc.run(build(), share=True))[-1]['result']['shared'] == {'id': 'id-1', 'rematch': False}
     assert len(history.rows) == 1
 
 
@@ -428,10 +435,82 @@ def test_api_always_shares_and_serves_the_public_wall(monkeypatch):
     client = TestClient(main.app)
 
     r = client.post('/api/duel', files={'file': ('cv.pdf', build(), 'application/pdf')})  # no opt-in field
-    assert json.loads(r.text.splitlines()[-1])['result']['shared'] == {'id': 'id-1'}
+    assert json.loads(r.text.splitlines()[-1])['result']['shared'] == {'id': 'id-1', 'rematch': False}
     wall = client.get('/api/duels?limit=5').json()
     assert wall['record']['total'] == 1 and wall['duels'][0]['challenger_name'] == 'Aarav M.'
     assert client.get('/api/duels?limit=500').status_code == 422
 
     monkeypatch.setattr(main, 'duel_history', SimpleNamespace(enabled=False))
     assert client.get('/api/duels').json() == {'enabled': False, 'duels': [], 'record': None}
+
+
+def test_rematch_with_same_email_updates_the_one_wall_entry():
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    first = list(svc.run(build(), share=True))[-1]['result']['shared']
+    second = list(svc.run(build(), share=True))[-1]['result']['shared']
+    assert first == {'id': 'id-1', 'rematch': False}
+    assert second == {'id': 'id-1', 'rematch': True}
+    assert len(history.rows) == 1 and history.rows[0]['duel_count'] == 2
+    assert 'aarav.mehta@example.com' not in json.dumps(history.rows) + json.dumps(list(history.keys))
+
+
+def test_different_email_gets_its_own_wall_entry(monkeypatch):
+    import synthetic_resume
+
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    list(svc.run(build(), share=True))
+    other = [(line.replace('aarav.mehta@example.com', 'someone.else@example.org'), size)
+             for line, size in synthetic_resume.LINES]
+    monkeypatch.setattr(synthetic_resume, 'LINES', other)
+    shared = list(svc.run(build(), share=True))[-1]['result']['shared']
+    assert shared == {'id': 'id-2', 'rematch': False}
+    assert len(history.rows) == 2 and [r['duel_count'] for r in history.rows] == [1, 1]
+
+
+class FakeConn:
+    """Stands in for a psycopg connection so the real DuelHistory SQL can be checked offline."""
+
+    def __init__(self, log, reply):
+        self.log, self.reply = log, reply
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=()):
+        self.log.append((sql, params))
+        reply = self.reply
+
+        class Cursor:
+            def fetchone(self):
+                return reply
+
+            def fetchall(self):
+                return []
+        return Cursor()
+
+
+@pytest.mark.parametrize('inserted, rematch', [(True, False), (False, True)])
+def test_history_upserts_on_identity_and_never_selects_it_for_the_wall(monkeypatch, inserted, rematch):
+    from duel.history import DuelHistory
+
+    calls = []
+    h = DuelHistory('postgresql://fake')
+    monkeypatch.setattr(h, '_connect', lambda: FakeConn(calls, {'id': 'abc', 'inserted': inserted}))
+    row = summarize(list(make_service().run(build()))[-1]['result'])
+    assert h.record(row, 'k' * 64) == {'id': 'abc', 'rematch': rematch}
+    sql, params = calls[0]
+    assert 'on conflict (identity_hash) where identity_hash is not null do update' in sql
+    assert 'duel_count = public.duels.duel_count + 1' in sql and 'created_at' not in sql
+    assert params[-1] == 'k' * 64
+
+    h.recent(5)
+    wall_sql = calls[1][0]
+    assert 'identity_hash' not in wall_sql and 'order by updated_at desc' in wall_sql
+    assert 'duel_count' in wall_sql and 'updated_at' in wall_sql

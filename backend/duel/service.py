@@ -5,10 +5,11 @@ import random
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterator, Optional
+from typing import Deque, Dict, Iterator, List, Optional
 
 from .github import GithubClient, find_github_username, valid_username
 from .history import DuelHistory, summarize
+from .identity import challenger_identity
 from .judge import judge
 from .pdf import ResumeError, extract_resume
 from .profiles import Fighter, extract_fighter, sachin_fighter
@@ -82,12 +83,14 @@ class DuelService:
         f.github = self.github.stats(SACHIN_GITHUB)
         return f
 
-    def _share(self, result: Dict) -> Optional[Dict]:
-        """Puts a duel on the public wall. A database hiccup never costs the visitor their result."""
+    def _share(self, result: Dict, text: str, links: List[str], github_username: Optional[str]) -> Optional[Dict]:
+        """Puts a duel on the public wall, updating the person's entry on a rematch ({'id', 'rematch'}).
+        A database hiccup never costs the visitor their result."""
         if not (self.history and self.history.enabled):
             return None
         try:
-            return {'id': self.history.record(summarize(result))}
+            identity = challenger_identity(text, links, github_username)
+            return self.history.record(summarize(result), identity.key if identity else None)
         except Exception as e:
             log.warning('Could not save duel to history: %s', type(e).__name__)
             return None
@@ -114,7 +117,7 @@ class DuelService:
                 self.llm, challenger, sachin, model=self.judge_model, fallback_model=self.fallback_model, rng=self.rng
             )
             result['github_lookup'] = {'username': username, 'found': challenger.github is not None}
-            result['shared'] = self._share(result) if share else None
+            result['shared'] = self._share(result, text, links, username) if share else None
             yield {'stage': 'done', 'result': result}
         except ResumeError as e:
             yield {'stage': 'error', 'message': str(e)}
