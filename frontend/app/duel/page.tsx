@@ -243,7 +243,7 @@ export default function DuelPage() {
                     placeholder="optional, we’ll read it from your résumé"
                     aria-label="GitHub username (optional)"
                     maxLength={39}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-faint focus:outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-base text-fg placeholder:text-faint focus:outline-none sm:text-sm"
                   />
                 </label>
 

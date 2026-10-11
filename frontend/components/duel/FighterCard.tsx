@@ -82,7 +82,7 @@ export default function FighterCard({
           )}
         </div>
       </div>
-      <dl className="relative mt-5 grid grid-cols-4 gap-2">
+      <dl className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {stats.map(s => (
           <div key={s.label} className="rounded-xl border border-line bg-bg/40 px-2 py-2.5 text-center">
             <dd className="text-lg font-medium text-fg">{s.value}</dd>

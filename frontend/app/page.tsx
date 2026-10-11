@@ -440,7 +440,7 @@ export default function Home() {
               {profile.email}
             </a>
           </div>
-          <div className="flex items-center gap-5 text-sm text-faint">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-faint">
             {socials
               .filter(s => !s.link.startsWith('mailto:'))
               .map(s => (

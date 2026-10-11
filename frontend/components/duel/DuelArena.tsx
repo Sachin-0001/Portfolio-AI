@@ -28,14 +28,14 @@ function Scoreboard({ result, revealed, names }: { result: DuelResult; revealed:
 
   return (
     <div className="card p-4 sm:p-5">
-      <div className="flex items-center justify-between font-mono text-xs">
-        <span style={{ color: SIDE_COLOR.challenger }}>
+      <div className="flex items-center justify-between gap-3 font-mono text-xs">
+        <span className="min-w-0 truncate" style={{ color: SIDE_COLOR.challenger }}>
           {names.challenger} · {wins('challenger')} {wins('challenger') === 1 ? 'round' : 'rounds'}
         </span>
-        <span className="text-faint">
+        <span className="shrink-0 text-faint">
           {revealed}/{result.rounds.length}
         </span>
-        <span style={{ color: SIDE_COLOR.sachin }}>
+        <span className="min-w-0 truncate text-right" style={{ color: SIDE_COLOR.sachin }}>
           {wins('sachin')} {wins('sachin') === 1 ? 'round' : 'rounds'} · {names.sachin}
         </span>
       </div>
@@ -177,7 +177,7 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-faint">Final verdict</p>
               <div className={result.decision === 'ko' ? 'animate-shake' : ''} style={{ animationDelay: '600ms' }}>
                 <h2
-                  className="animate-slam mt-4 font-serif text-6xl italic sm:text-8xl"
+                  className="animate-slam mt-4 font-serif text-5xl italic [overflow-wrap:anywhere] sm:text-8xl"
                   style={{ color: result.winner === 'draw' ? 'var(--fg)' : SIDE_COLOR[result.winner as Side] }}
                 >
                   {verdict.big}

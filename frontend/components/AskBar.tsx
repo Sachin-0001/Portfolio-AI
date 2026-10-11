@@ -35,7 +35,7 @@ export default function AskBar() {
           onChange={e => setValue(e.target.value)}
           placeholder="Ask anything about my work…"
           aria-label="Ask the portfolio assistant"
-          className="min-w-0 flex-1 bg-transparent py-2 text-[15px] text-fg placeholder:text-faint focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent py-2 text-base text-fg sm:text-[15px] placeholder:text-faint focus:outline-none"
         />
         <button
           type="submit"

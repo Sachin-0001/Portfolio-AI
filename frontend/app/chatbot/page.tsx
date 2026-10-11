@@ -240,7 +240,7 @@ export default function Chatbot() {
       </header>
 
       {/* Conversation */}
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden">
         {isEmpty && (
           <>
             <div aria-hidden className="bg-grid pointer-events-none absolute inset-0" />
@@ -311,7 +311,7 @@ export default function Chatbot() {
                   <Sparkle className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="prose prose-invert max-w-none prose-headings:font-medium prose-headings:tracking-tight prose-headings:text-fg prose-h2:mb-3 prose-h2:mt-1 prose-h2:text-2xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-relaxed prose-p:text-muted prose-a:text-accent prose-a:no-underline hover:prose-a:underline prose-strong:font-medium prose-strong:text-fg prose-code:rounded prose-code:bg-surface-2 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:font-normal prose-code:text-accent prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-line prose-pre:bg-surface prose-blockquote:border-l-accent prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-muted prose-li:text-muted prose-li:marker:text-faint prose-hr:border-line">
+                  <div className="prose prose-invert max-w-none [overflow-wrap:anywhere] prose-table:block prose-table:overflow-x-auto prose-pre:overflow-x-auto prose-headings:font-medium prose-headings:tracking-tight prose-headings:text-fg prose-h2:mb-3 prose-h2:mt-1 prose-h2:text-2xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-relaxed prose-p:text-muted prose-a:text-accent prose-a:no-underline hover:prose-a:underline prose-strong:font-medium prose-strong:text-fg prose-code:rounded prose-code:bg-surface-2 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:font-normal prose-code:text-accent prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-line prose-pre:bg-surface prose-blockquote:border-l-accent prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-muted prose-li:text-muted prose-li:marker:text-faint prose-hr:border-line">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{shown}</ReactMarkdown>
                   </div>
                   {typing && <span className="caret inline-block h-4 w-2 bg-accent/80" />}
@@ -366,7 +366,7 @@ export default function Chatbot() {
               aria-label="Message"
               rows={1}
               disabled={isLoading}
-              className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-relaxed text-fg placeholder:text-faint focus:outline-none disabled:opacity-60"
+              className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-base leading-relaxed sm:text-[15px] text-fg placeholder:text-faint focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"

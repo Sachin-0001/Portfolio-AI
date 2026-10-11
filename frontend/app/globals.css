@@ -41,6 +41,8 @@ html {
 }
 
 body {
+  /* clip, not hidden: stops stray decorative glows from causing sideways scroll without breaking position: sticky */
+  overflow-x: clip;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
