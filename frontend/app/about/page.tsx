@@ -6,6 +6,8 @@ import { ArrowLeft, ArrowRight, Sparkle } from '@/components/Icons';
 export const metadata: Metadata = {
   title: 'How S.A.C.H.I.N works | Sachin Suresh',
   description: 'Architecture of the retrieval-augmented assistant behind this portfolio.',
+  openGraph: { title: 'How S.A.C.H.I.N works | Sachin Suresh', description: 'Architecture of the retrieval-augmented assistant behind this portfolio.', url: '/about' },
+  twitter: { card: 'summary_large_image', title: 'How S.A.C.H.I.N works | Sachin Suresh', description: 'Architecture of the retrieval-augmented assistant behind this portfolio.' },
 };
 
 const PIPELINE = [

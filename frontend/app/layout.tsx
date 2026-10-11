@@ -19,10 +19,30 @@ const instrumentSerif = Instrument_Serif({
   style: ["normal", "italic"],
 });
 
+// Absolute base for Open Graph URLs: explicit override, else Vercel's production domain, else local dev
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+
+const description =
+  "Sachin Suresh builds agentic AI systems, RAG pipelines and ML-driven products end to end. Explore the work, or ask the portfolio's AI assistant.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Sachin Suresh | AI / ML Engineer",
-  description:
-    "Sachin Suresh builds agentic AI systems, RAG pipelines and ML-driven products end to end. Explore the work, or ask the portfolio's AI assistant.",
+  description,
+  openGraph: {
+    type: "website",
+    siteName: "Sachin Suresh",
+    title: "Sachin Suresh | AI / ML Engineer",
+    description,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sachin Suresh | AI / ML Engineer",
+    description,
+  },
 };
 
 export const viewport: Viewport = {
