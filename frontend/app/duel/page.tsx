@@ -32,7 +32,14 @@ async function runDuel(file: File, github: string, onEvent: (e: DuelEvent) => vo
   const form = new FormData();
   form.append('file', file);
   form.append('github', github);
-  const res = await fetch('/api/duel', { method: 'POST', body: form });
+  // 503 = backend still warming up after a cold start: retry quietly (the loader stays on "Reading")
+  const deadline = Date.now() + 120_000;
+  let res: Response;
+  for (;;) {
+    res = await fetch('/api/duel', { method: 'POST', body: form });
+    if (res.status !== 503 || Date.now() > deadline) break;
+    await new Promise(r => setTimeout(r, 3_000));
+  }
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error ?? 'The arena is unavailable right now. Please try again shortly.');

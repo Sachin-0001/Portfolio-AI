@@ -70,3 +70,6 @@ logs/
 *.sqlite3
 .vercel
 .env*.local
+
+# Embedding model cache (prefetched at build time)
+.cache/

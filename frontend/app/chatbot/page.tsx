@@ -52,6 +52,9 @@ const TECH_FACTS = [
   'Docker containers share the host kernel, which is why they start so fast.',
 ];
 
+// While the backend loads its models it answers 503; retry for up to this long.
+const WARMUP_MAX_MS = 120_000;
+const WARMUP_RETRY_MS = 3_000;
 // Only show the cold-start overlay if the backend is actually slow to answer.
 const WAKE_THRESHOLD_MS = 2500;
 // Characters revealed per animation tick for assistant replies.
@@ -145,11 +148,19 @@ export default function Chatbot() {
       const wakeTimer = hasAnswered.current ? null : setTimeout(() => setIsWaking(true), WAKE_THRESHOLD_MS);
 
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, history }),
-        });
+        // 503 = backend still warming up after a cold start: keep the wake overlay up and retry
+        const deadline = Date.now() + WARMUP_MAX_MS;
+        let response: Response;
+        for (;;) {
+          response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, history }),
+          });
+          if (response.status !== 503 || Date.now() > deadline) break;
+          setIsWaking(true);
+          await new Promise(r => setTimeout(r, WARMUP_RETRY_MS));
+        }
         if (!response.ok) throw new Error(`API error: ${response.status}`);
         const data = await response.json();
         hasAnswered.current = true;

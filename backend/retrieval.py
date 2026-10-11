@@ -150,17 +150,31 @@ class BM25Retriever:
         return [(int(i), float(scores[i])) for i in order if scores[i] > 0]
 
 
+DEFAULT_EMBEDDING_MODEL = 'BAAI/bge-small-en-v1.5'
+# Inside the project so a build-time prefetch (prefetch_models.py) ships with the deploy instead of
+# re-downloading on every cold start
+DEFAULT_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache', 'fastembed')
+
+
+def embedding_cache_dir() -> str:
+    return os.getenv('FASTEMBED_CACHE_PATH') or DEFAULT_CACHE_DIR
+
+
 class DenseRetriever:
-    """Semantic search with a small ONNX embedding model (no torch, ~130 MB RAM)."""
+    """Semantic search with a small ONNX embedding model (no torch). ~350 MB peak RSS with these settings."""
 
     def __init__(self, docs: List[Document], model_name: Optional[str] = None):
         from fastembed import TextEmbedding
 
+        # One thread and small batches: embedding all docs in one batch with every core peaked at ~520 MB,
+        # over a 512 MB instance; this peaks at ~350 MB for the same vectors.
         self.model = TextEmbedding(
-            model_name or os.getenv('EMBEDDING_MODEL', 'BAAI/bge-small-en-v1.5'),
-            cache_dir=os.getenv('FASTEMBED_CACHE_PATH'),
+            model_name or os.getenv('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
+            cache_dir=embedding_cache_dir(),
+            threads=int(os.getenv('EMBEDDING_THREADS', '1')),
         )
-        self.matrix = self._normalize(np.array(list(self.model.passage_embed([d.content for d in docs]))))
+        vectors = self.model.passage_embed([d.content for d in docs], batch_size=4)
+        self.matrix = self._normalize(np.array(list(vectors)))
 
     @staticmethod
     def _normalize(m: np.ndarray) -> np.ndarray:

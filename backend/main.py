@@ -10,6 +10,7 @@ from duel.pdf import MAX_BYTES
 from duel.history import DuelHistory
 from duel.service import DuelService, RateLimiter
 import os
+import threading
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -22,20 +23,29 @@ duel_service = None
 duel_history = DuelHistory(os.getenv('DATABASE_URL'))
 duel_limiter = RateLimiter(limit=5, window_s=600)
 
+def _initialize():
+    """Heavy setup (embedding model, database). Runs off the startup path so the port opens immediately;
+    until it finishes, chat and duel answer 503 and the frontend retries."""
+    global portfolio_rag, duel_service
+    try:
+        print("Initializing RAG system...", flush=True)
+        rag = PortfolioRAG('portfolio_data.json')
+        if duel_history.enabled:
+            try:
+                duel_history.ensure_schema()
+                print("Duel history database ready", flush=True)
+            except Exception as e:  # the duel still works without the wall; don't fail boot
+                print(f"Duel history database unavailable: {type(e).__name__}", flush=True)
+        duel_service = DuelService(rag.portfolio_data, rag.llm, history=duel_history)
+        portfolio_rag = rag
+        print("RAG system initialized successfully!", flush=True)
+    except Exception as e:
+        print(f"Initialization failed: {type(e).__name__}: {e}", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize RAG system after server starts"""
-    global portfolio_rag, duel_service
-    print("Initializing RAG system...")
-    portfolio_rag = PortfolioRAG('portfolio_data.json')
-    if duel_history.enabled:
-        try:
-            duel_history.ensure_schema()
-            print("Duel history database ready")
-        except Exception as e:  # the duel still works without the wall; don't fail boot
-            print(f"Duel history database unavailable: {type(e).__name__}")
-    duel_service = DuelService(portfolio_rag.portfolio_data, portfolio_rag.llm, history=duel_history)
-    print("RAG system initialized successfully!")
+    threading.Thread(target=_initialize, name='init', daemon=True).start()
     yield
 
 app = FastAPI(title="Portfolio AI API", version="2.0.0", lifespan=lifespan)
@@ -73,7 +83,7 @@ def chat(request: ChatRequest):
     """Handle chat requests from frontend"""
     try:
         if portfolio_rag is None:
-            raise HTTPException(status_code=503, detail='AI system is still initializing, please try again in a moment')
+            raise HTTPException(status_code=503, detail='AI system is warming up, please try again in a moment')
         
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail='No message provided')
@@ -103,7 +113,7 @@ def _client_key(request: Request) -> str:
 async def duel(request: Request, file: UploadFile = File(...), github: str = Form('')):
     """Streams NDJSON progress events, ending with a 'done' (result) or 'error' event."""
     if duel_service is None:
-        raise HTTPException(status_code=503, detail='AI system is still initializing, please try again in a moment')
+        raise HTTPException(status_code=503, detail='The arena is warming up, please try again in a moment')
     if not duel_limiter.allow(_client_key(request)):
         raise HTTPException(status_code=429, detail='Easy, champ. That is a lot of duels; try again in a few minutes.')
 
@@ -137,8 +147,8 @@ async def root():
 
 @app.get('/api/health')
 async def health():
-    """Health check endpoint"""
-    return {'status': 'healthy'}
+    """Health check: up as soon as the port is open; 'ready' turns true once the AI system has loaded"""
+    return {'status': 'healthy', 'ready': portfolio_rag is not None}
 
 if __name__ == '__main__':
     import uvicorn

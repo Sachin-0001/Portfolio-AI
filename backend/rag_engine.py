@@ -117,7 +117,8 @@ class PortfolioRAG:
 
     def _build_retriever(self, dense: bool):
         bm25 = BM25Retriever(self.documents)
-        if not dense:
+        # EMBEDDING_MODEL=none: lexical-only search for very small instances
+        if not dense or os.getenv('EMBEDDING_MODEL', '').lower() == 'none':
             return bm25
         try:
             return HybridRetriever([bm25, DenseRetriever(self.documents)])
