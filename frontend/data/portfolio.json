@@ -1,0 +1,420 @@
+{
+  "profile": {
+    "name": "Sachin Suresh",
+    "title": "AI / ML Engineer",
+    "headline": "I build agentic AI systems that ship to production.",
+    "summary": "Lead AI Engineer Intern at Capmob Financial Services and Computer Science undergrad at Dayananda Sagar College of Engineering. I design LLM agents, RAG pipelines and ML-driven decision systems end to end, from the model loop to the AWS infrastructure and CI gates that keep them running.",
+    "location": "Bangalore, India",
+    "email": "sachin.samprit@gmail.com",
+    "status": "Lead AI Engineer Intern @ Capmob",
+    "resume_url": "/Sachin_Suresh.pdf"
+  },
+  "education": [
+    {
+      "institution": "Dayananda Sagar College of Engineering",
+      "degree": "Bachelor of Engineering in Computer Science",
+      "cgpa": "8.86 / 10.0",
+      "start_date": "Oct 2023",
+      "end_date": "July 2027",
+      "location": "Bangalore, India"
+    }
+  ],
+  "experience": [
+    {
+      "company": "Capmob Financial Services",
+      "role": "Lead AI Engineer Intern",
+      "start_date": "Jun 2026",
+      "end_date": "Present",
+      "mode": "Hybrid",
+      "link": "https://capmobfinance.com/",
+      "description": "Leading the AI engineering of Capmob AI, an SME lending platform built on FastAPI and AWS Bedrock.",
+      "highlights": [
+        "Architected Capmob AI, an SME lending platform on FastAPI + AWS Bedrock: an adaptive interview engine, a deterministic 50-parameter CapScore credit-scoring model with lender-policy fit, and event-driven document ingestion (S3, SQS, Postgres) with concurrent classification and sub-minute extraction.",
+        "Automated partner onboarding with Zoho: referral CRM lead sync, Zoho Sign agreements with template prefill, and webhook handling with missed-webhook reconciliation and capped retries; added KYC autofill from PDF uploads in a single classify-and-extract call.",
+        "Managed AWS infrastructure (ECS/Fargate, RDS, ALB, Route 53/ACM, Secrets Manager, KMS, DynamoDB) with CI security gates (Semgrep, Gitleaks, pip-audit, coverage thresholds); built the company website on a custom headless CMS, saving $300+/month in licensing."
+      ],
+      "tags": [
+        "FastAPI",
+        "AWS Bedrock",
+        "PostgreSQL",
+        "S3 / SQS",
+        "ECS Fargate",
+        "DynamoDB",
+        "Zoho",
+        "GitHub Actions"
+      ]
+    },
+    {
+      "company": "XTrail Consulting Services",
+      "role": "Junior Developer Intern",
+      "start_date": "Jan 2026",
+      "end_date": "Jun 2026",
+      "mode": "Remote",
+      "description": "Built production dashboards and agentic automation workflows for manufacturing operations.",
+      "highlights": [
+        "Built production dashboards (React + Flask) visualizing operational trends across manufacturing pipelines with sub-second response times.",
+        "Designed agentic n8n automation workflows integrating custom AI agents, structured JSON parsers and multi-condition decision logic for end-to-end process orchestration."
+      ],
+      "tags": [
+        "React",
+        "Flask",
+        "n8n",
+        "AI Agents"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": 1,
+      "name": "Harness",
+      "tagline": "Custom AI agent runtime, built from scratch",
+      "description": "A tool-calling agent runtime written from scratch (no LangGraph or AutoGPT) on Groq's gpt-oss-20b, with a dedicated safeguard model and two-tier persistent memory.",
+      "highlights": [
+        "Tool-calling agent loop wiring 6 tools (web search, weather, calculator, sandboxed code exec, file I/O, email) into a 10-iteration reasoning loop.",
+        "Guarded by a dedicated gpt-oss-safeguard-20b model that screens user input, every tool call and the final output.",
+        "Two-tier memory: an LLM-distilled episodic log feeding a 384-dim FAISS semantic index for persistent cross-session recall."
+      ],
+      "tags": [
+        "Python",
+        "LangChain",
+        "Groq",
+        "FAISS",
+        "HuggingFace",
+        "AI Agents"
+      ],
+      "date": "July 2026",
+      "featured": true,
+      "github": "https://github.com/Sachin-0001/Harness",
+      "link": "https://github.com/Sachin-0001/Harness"
+    },
+    {
+      "id": 2,
+      "name": "UnBind",
+      "tagline": "AI-powered legal contract analyzer",
+      "description": "A full-stack contract analyzer that ingests PDF, DOCX and photographed contracts, flags risky clauses, answers questions with verified citations and reminds you before deadlines are missed.",
+      "highlights": [
+        "Ingests PDF, DOCX and photographed contracts via Groq vision OCR, fanning out clause-by-clause risk analysis in parallel with SSE progress streaming across an 8-stage pipeline.",
+        "Citation-verified Q&A engine using HyDE retrieval with character-offset source citations, plus a deadline-reminder system with deterministic date parsing across 8 resolution classes and an idempotent GitHub Actions sweep.",
+        "Payments hardened with HMAC-SHA256 signature verification and atomic quota enforcement, backed by a 299-test suite (281 pytest + 18 vitest) gated in CI by ruff, eslint, tsc and Gitleaks; also shipped as an npm CLI REPL."
+      ],
+      "tags": [
+        "Next.js 15",
+        "FastAPI",
+        "MongoDB",
+        "Groq",
+        "ChromaDB",
+        "RAG",
+        "Razorpay"
+      ],
+      "date": "March 2026",
+      "featured": true,
+      "link": "https://unbindai.vercel.app/",
+      "github": "https://github.com/Sachin-0001/UnBind",
+      "npm": "https://www.npmjs.com/package/unbindai"
+    },
+    {
+      "id": 10,
+      "name": "Solvent",
+      "tagline": "AI finance-controller pipeline",
+      "description": "An AI finance controller built for the Razorpay AI Buildathon (Track 04). It reconciles merchant settlements across Razorpay, ledger and bank data, classifies GST treatment, forecasts settlements and cash position, and answers questions through a retrieval-backed agent.",
+      "highlights": [
+        "Three-tier reconciliation cascade (exact → fuzzy → LLM on the residual only) scoring precision 1.00 and recall 1.00 against a held-out 250-transaction ground truth; code resolves 193 of 213 matches and the LLM tier the remaining 20.",
+        "Rule-first GST classifier with an LLM fallback for edge cases. Every match, exception and classification carries its reasoning to the dashboard, and nothing is auto-closed without human review.",
+        "Trained settlement-timing and deduction regressors (MAE 0.67 days and 0.0037) plus next-day GMV, refund and settlement forecasts feeding a deterministic cash-position engine, with a Q&A agent over sentence-transformers embeddings and Groq."
+      ],
+      "tags": [
+        "Python",
+        "FastAPI",
+        "PostgreSQL",
+        "Groq",
+        "scikit-learn",
+        "sentence-transformers",
+        "Next.js"
+      ],
+      "date": "Sep 2026",
+      "link": "https://solvent-ebon.vercel.app",
+      "github": "https://github.com/Sachin-0001/Solvent"
+    },
+    {
+      "id": 11,
+      "name": "FundBridge",
+      "tagline": "AI lending marketplace for businesses",
+      "description": "An AI-powered fintech marketplace connecting businesses seeking loans with banks looking for qualified borrowers, through eligibility scoring, bank matching and funding recommendations.",
+      "highlights": [
+        "FastAPI and SQLAlchemy 2.0 backend on PostgreSQL with Alembic migrations, layered into API, repository and model modules for businesses, banks, applications and matches.",
+        "Next.js and TypeScript frontend built with shadcn/ui, Framer Motion and Zod; Groq powers the AI recommendations."
+      ],
+      "tags": [
+        "Next.js",
+        "TypeScript",
+        "FastAPI",
+        "SQLAlchemy",
+        "PostgreSQL",
+        "Groq"
+      ],
+      "date": "Jun 2026",
+      "link": "https://fundbridge-theta.vercel.app/",
+      "github": "https://github.com/Sachin-0001/FundBridge"
+    },
+    {
+      "id": 12,
+      "name": "FinSight",
+      "tagline": "RL environment for financial document analysis",
+      "description": "An OpenEnv, Gym-style environment for training RL agents on financial document analysis: anomaly detection, KPI extraction and compliance risk assessment.",
+      "highlights": [
+        "Three tasks of rising difficulty (anomaly classification, KPI extraction, compliance assessment) scored by deterministic programmatic graders, with no LLM-as-judge.",
+        "Shaped rewards with partial credit, a confidence-calibration bonus and illegal-action and step-efficiency penalties, served over a typed HTTP reset/step/state API.",
+        "Containerised with Docker Compose, Kubernetes manifests and a Jenkins pipeline, plus a baseline LLM agent that runs against any OpenAI-compatible endpoint."
+      ],
+      "tags": [
+        "Python",
+        "Reinforcement Learning",
+        "OpenEnv",
+        "Docker",
+        "Kubernetes"
+      ],
+      "date": "May 2026",
+      "github": "https://github.com/Sachin-0001/FinSight",
+      "link": "https://github.com/Sachin-0001/FinSight"
+    },
+    {
+      "id": 3,
+      "name": "RagSum",
+      "tagline": "RAG chatbot with a self-built summarizer",
+      "description": "A RAG chatbot assistant paired with a self-built text summarization tool.",
+      "tags": [
+        "Python",
+        "LLMs",
+        "RAG",
+        "FAISS",
+        "Streamlit"
+      ],
+      "link": "https://ragsum-jdjmnubattxpwg8v8dgvvh.streamlit.app/"
+    },
+    {
+      "id": 4,
+      "name": "Chat With Docs",
+      "tagline": "Ask questions of your documents",
+      "description": "RAG-based application that analyzes uploaded documents and answers queries about them using LLMs.",
+      "tags": [
+        "Python",
+        "LLMs",
+        "RAG",
+        "Streamlit"
+      ],
+      "link": "https://chat-with-docs-s4ruhadck7ivgqbtomwsne.streamlit.app/"
+    },
+    {
+      "id": 5,
+      "name": "FairFare",
+      "tagline": "ML insights against peak-hour cancellations",
+      "description": "A system designed to reduce ride-booking cancellations during peak hours using ML insights.",
+      "tags": [
+        "Python",
+        "Machine Learning",
+        "Next.js",
+        "TypeScript",
+        "MongoDB"
+      ],
+      "link": "https://fairfare.vercel.app/"
+    },
+    {
+      "id": 6,
+      "name": "Loan Approval Prediction",
+      "tagline": "Supervised credit-decision model",
+      "description": "Predicts loan approval outcomes using supervised ML models.",
+      "tags": [
+        "Python",
+        "Scikit-learn",
+        "Pandas",
+        "Streamlit"
+      ],
+      "link": "https://loan-approval-predictor-vwzb9jypgp5fulazhfh5mn.streamlit.app/"
+    },
+    {
+      "id": 7,
+      "name": "House Price Prediction",
+      "tagline": "Regression on property features",
+      "description": "Machine learning model that predicts house prices from property features.",
+      "tags": [
+        "Python",
+        "Scikit-learn",
+        "Pandas",
+        "Streamlit"
+      ],
+      "link": "https://house-price-predictor-e7z4afvvrxp8sysznskwek.streamlit.app/"
+    },
+    {
+      "id": 8,
+      "name": "Finance Dashboard",
+      "tagline": "Bank-statement analytics",
+      "description": "Dashboard for tracking and managing personal finances through bank statement analysis.",
+      "tags": [
+        "Python",
+        "Pandas",
+        "Streamlit",
+        "Data Science"
+      ],
+      "link": "https://finance-dashboard-7xpxgiwawqe4a45cyqkjzn.streamlit.app/"
+    },
+    {
+      "id": 9,
+      "name": "Song Recommendation System",
+      "tagline": "Content-based music recommender",
+      "description": "Recommends songs based on user-selected tracks using ML techniques.",
+      "tags": [
+        "Python",
+        "Machine Learning",
+        "Recommendation Systems"
+      ]
+    }
+  ],
+  "skill_groups": [
+    {
+      "category": "Languages",
+      "items": [
+        "Python",
+        "TypeScript",
+        "Go",
+        "C++"
+      ]
+    },
+    {
+      "category": "AI / ML",
+      "items": [
+        "PyTorch",
+        "Scikit-learn",
+        "NumPy",
+        "Pandas",
+        "OpenCV",
+        "PEFT",
+        "QLoRA"
+      ]
+    },
+    {
+      "category": "Agentic & LLM",
+      "items": [
+        "LangChain",
+        "LangGraph",
+        "LangFuse",
+        "HuggingFace",
+        "Ollama",
+        "AWS Bedrock",
+        "n8n"
+      ]
+    },
+    {
+      "category": "Frameworks",
+      "items": [
+        "FastAPI",
+        "Pydantic",
+        "sentence-transformers",
+        "Weights & Biases",
+        "Next.js"
+      ]
+    },
+    {
+      "category": "Data & Vector Stores",
+      "items": [
+        "PostgreSQL",
+        "MongoDB",
+        "ChromaDB",
+        "FAISS",
+        "Redis"
+      ]
+    },
+    {
+      "category": "Cloud & MLOps",
+      "items": [
+        "AWS",
+        "Docker",
+        "GitHub Actions",
+        "Vercel",
+        "MLflow",
+        "Airflow",
+        "DagsHub"
+      ]
+    }
+  ],
+  "skills": [
+    "Python",
+    "TypeScript",
+    "Go",
+    "C++",
+    "PyTorch",
+    "Scikit-learn",
+    "NumPy",
+    "Pandas",
+    "OpenCV",
+    "PEFT",
+    "QLoRA",
+    "LangChain",
+    "LangGraph",
+    "LangFuse",
+    "HuggingFace",
+    "Ollama",
+    "AWS Bedrock",
+    "n8n",
+    "FastAPI",
+    "Pydantic",
+    "sentence-transformers",
+    "Weights & Biases",
+    "Next.js",
+    "PostgreSQL",
+    "MongoDB",
+    "ChromaDB",
+    "FAISS",
+    "Redis",
+    "AWS",
+    "Docker",
+    "GitHub Actions",
+    "Vercel",
+    "MLflow",
+    "Airflow",
+    "DagsHub"
+  ],
+  "achievements": [
+    {
+      "title": "Runner-up, BotCraft",
+      "description": "Runner-up among 100+ teams for a Discord automation bot in Python with an event-driven architecture and slash-command integrations.",
+      "date": "2024"
+    },
+    {
+      "title": "Shortlisted, Great Bengaluru Hackathon",
+      "description": "Shortlisted while competing among 1000+ teams.",
+      "date": "March 2025"
+    },
+    {
+      "title": "CodeChef: 100 Days Streak, Peak Rating 1210",
+      "description": "Competitive programming on CodeChef: earned the 100-day coding streak badge with a peak rating of 1210.",
+      "date": "2024"
+    },
+    {
+      "title": "LeetCode Daily Challenge Badges",
+      "description": "Consistent DSA and competitive programming practice on LeetCode: 50 & 100 Days coding challenge badges in 2025, and the 50 Days badge in 2026.",
+      "date": "2025 – 2026"
+    }
+  ],
+  "socials": [
+    {
+      "platform": "GitHub",
+      "link": "https://github.com/Sachin-0001"
+    },
+    {
+      "platform": "LinkedIn",
+      "link": "https://www.linkedin.com/in/sachin-suresh-06782b300"
+    },
+    {
+      "platform": "Kaggle",
+      "link": "https://www.kaggle.com/sachin11105"
+    },
+    {
+      "platform": "X (Twitter)",
+      "link": "https://x.com/Sachin1112005"
+    },
+    {
+      "platform": "Email",
+      "link": "mailto:sachin.samprit@gmail.com"
+    }
+  ]
+}

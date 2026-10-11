@@ -1,609 +1,544 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ArrowLeft, ArrowUpRight, Download, Send, SocialIcon, Sparkle } from '@/components/Icons';
+import type { Achievement, Experience, Project, SkillGroup, Social } from '@/lib/portfolio';
+
+type Card =
+  | { type: 'projects'; data: Project[] }
+  | { type: 'skills'; data: string[]; groups?: SkillGroup[] }
+  | { type: 'achievements'; data: Achievement[] }
+  | { type: 'experience'; data: Experience[] }
+  | { type: 'socials'; data: Social[] }
+  | { type: 'resume'; data: { filename: string; url: string } };
+
+interface Source {
+  id: string;
+  type: string;
+  title: string;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{ type: string; metadata: any }>;
-  structuredData?: {
-    type: 'projects' | 'skills' | 'achievements' | 'experience' | 'socials' | 'resume';
-    data: any;
-  };
-  isTyping?: boolean;
-  displayedContent?: string;
+  cards?: Card[];
+  sources?: Source[];
+  isError?: boolean;
 }
+
+// Prior turns sent with each question so follow-ups ("how was it tested?") keep their subject
+const HISTORY_TURNS = 4;
+
+const GREETING = 'What do you wish to learn about me today?';
+
+const SUGGESTIONS = [
+  { label: 'Show me your projects', hint: 'All work, as cards' },
+  { label: 'What did you build at Capmob?', hint: 'Lending AI on AWS Bedrock' },
+  { label: 'How does Harness work?', hint: 'Agent runtime from scratch' },
+  { label: 'What are your skills?', hint: 'The full stack' },
+];
+
+const TECH_FACTS = [
+  'The first computer bug was an actual moth trapped in a Harvard Mark II in 1947.',
+  'Python was named after Monty Python, not the snake.',
+  'The Transformer paper, “Attention Is All You Need”, was published in 2017.',
+  'Backpropagation was popularised by Rumelhart, Hinton and Williams in 1986.',
+  'Git was created by Linus Torvalds in about two weeks.',
+  'FAISS can search billions of vectors and was open-sourced by Meta in 2017.',
+  'JavaScript was created in just 10 days by Brendan Eich in 1995.',
+  'Docker containers share the host kernel, which is why they start so fast.',
+];
+
+// Only show the cold-start overlay if the backend is actually slow to answer.
+const WAKE_THRESHOLD_MS = 2500;
+// Characters revealed per animation tick for assistant replies.
+const TYPE_CHUNK = 3;
+const TYPE_TICK_MS = 12;
 
 export default function Chatbot() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [revealed, setRevealed] = useState<number | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [displayedText, setDisplayedText] = useState('');
-  const [showInitialMessage, setShowInitialMessage] = useState(true);
-  const [isWakingBackend, setIsWakingBackend] = useState(false);
-  const [isFirstRequest, setIsFirstRequest] = useState(true);
-  const [floatingFacts, setFloatingFacts] = useState<Array<{id: number; fact: string; left: string; top: string; delay: number}>>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [greeting, setGreeting] = useState('');
+  const [isWaking, setIsWaking] = useState(false);
+  const [wakeSeconds, setWakeSeconds] = useState(0);
+  const [factIndex, setFactIndex] = useState(0);
+  const hasAnswered = useRef(false);
+  const messagesRef = useRef<Message[]>([]);
+  const autoAsked = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const initialMessage = "What do you wish to learn about me today?";
-  
-  const techFacts = [
-    "The first computer bug was an actual moth trapped in a Harvard Mark II computer in 1947.",
-    "Python was named after the comedy group Monty Python, not the snake.",
-    "The first 1GB hard drive was released in 1980 and weighed over 500 pounds.",
-    "JavaScript was created in just 10 days by Brendan Eich in 1995.",
-    "The first domain name ever registered was Symbolics.com on March 15, 1985.",
-    "There are over 700 programming languages in use today.",
-    "The term 'debugging' came from removing actual insects from early computers.",
-    "Google processes over 8.5 billion searches per day.",
-    "The average developer writes about 50-100 lines of code per day.",
-    "Git was created by Linus Torvalds in just two weeks.",
-    "The '@' symbol in email addresses was chosen in 1971 by Ray Tomlinson.",
-    "React was developed by Facebook and released to the public in 2013.",
-    "Docker containers share the host OS kernel, making them more efficient than VMs.",
-    "TypeScript is a superset of JavaScript that adds static typing.",
-    "The term 'cloud computing' was first used in 1996.",
-  ];
-
-  // Generate floating facts when backend is waking up
   useEffect(() => {
-    if (isWakingBackend) {
-      // Create initial floating facts
-      const facts = techFacts.map((fact, index) => ({
-        id: index,
-        fact,
-        left: `${Math.random() * 80 + 10}%`,
-        top: `${Math.random() * 80 + 10}%`,
-        delay: index * 0.8,
-      }));
-      setFloatingFacts(facts);
-    } else {
-      setFloatingFacts([]);
-    }
-  }, [isWakingBackend]);
-
-  // Typing animation for initial message
-  useEffect(() => {
-    if (showInitialMessage && displayedText.length < initialMessage.length) {
-      const timeout = setTimeout(() => {
-        setDisplayedText(initialMessage.slice(0, displayedText.length + 1));
-      }, 50);
-      return () => clearTimeout(timeout);
-    }
-  }, [displayedText, showInitialMessage]);
-
-  // Typing animation for assistant messages
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isTyping) {
-      const currentLength = lastMessage.displayedContent?.length || 0;
-      const fullContent = lastMessage.content;
-      
-      if (currentLength < fullContent.length) {
-        const timeout = setTimeout(() => {
-          setMessages(prev => {
-            const newMessages = [...prev];
-            const lastMsg = newMessages[newMessages.length - 1];
-            if (lastMsg.isTyping) {
-              lastMsg.displayedContent = fullContent.slice(0, currentLength + 1);
-            }
-            return newMessages;
-          });
-        }, 5); // Adjust speed here (lower = faster)
-        return () => clearTimeout(timeout);
-      } else {
-        // Typing complete
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMsg = newMessages[newMessages.length - 1];
-          if (lastMsg.isTyping) {
-            lastMsg.isTyping = false;
-            lastMsg.displayedContent = fullContent;
-          }
-          return newMessages;
-        });
-      }
-    }
+    messagesRef.current = messages;
   }, [messages]);
 
-  // Auto-scroll to bottom
+  // Greeting typewriter
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (greeting.length >= GREETING.length) return;
+    const t = setTimeout(() => setGreeting(GREETING.slice(0, greeting.length + 1)), 38);
+    return () => clearTimeout(t);
+  }, [greeting]);
 
-  const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
-
-    setShowInitialMessage(false);
-    const userMessage = input.trim();
-    
-    // Check for special commands
-    if (userMessage.toLowerCase() === '/about') {
-      window.open('/about', '_blank');
-      setInput('');
+  // Reveal the latest assistant message a few characters at a time
+  const last = messages[messages.length - 1];
+  useEffect(() => {
+    if (revealed === null || !last || last.role !== 'assistant') return;
+    if (revealed >= last.content.length) {
+      setRevealed(null);
       return;
     }
-    
-    setInput('');
-    
-    // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsLoading(true);
-    
-    // Show backend waking loader only for first request
-    if (isFirstRequest) {
-      setIsWakingBackend(true);
-    }
+    const t = setTimeout(() => setRevealed(r => (r === null ? null : r + TYPE_CHUNK)), TYPE_TICK_MS);
+    return () => clearTimeout(t);
+  }, [revealed, last]);
 
-    try {
-      // Call the backend API
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userMessage }),
-      });
+  // Cold-start overlay: elapsed timer + rotating facts
+  useEffect(() => {
+    if (!isWaking) return;
+    setWakeSeconds(0);
+    const tick = setInterval(() => setWakeSeconds(s => s + 1), 1000);
+    const facts = setInterval(() => setFactIndex(i => (i + 1) % TECH_FACTS.length), 4500);
+    return () => {
+      clearInterval(tick);
+      clearInterval(facts);
+    };
+  }, [isWaking]);
 
-      setIsWakingBackend(false); // Hide loader once response is received
-      setIsFirstRequest(false); // Mark that first request is complete
+  // Keep the newest content in view
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: revealed === null ? 'smooth' : 'auto' });
+  }, [messages, revealed, isLoading]);
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+  // Auto-grow the textarea
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [input]);
+
+  const send = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text || isLoading) return;
+
+      if (text.toLowerCase() === '/about') {
+        window.open('/about', '_blank');
+        setInput('');
+        return;
       }
 
-      const data = await response.json();
-      
-      // Add assistant response with typing animation
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: data.response,
-        sources: data.sources,
-        structuredData: data.structured_data,
-        isTyping: true,
-        displayedContent: '',
-      }]);
-    } catch (error) {
-      setIsWakingBackend(false); // Hide loader on error
-      setIsFirstRequest(false);
-      console.error('Error calling API:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const history = messagesRef.current
+        .filter(m => !m.isError)
+        .slice(-HISTORY_TURNS)
+        .map(m => ({ role: m.role, content: m.content }));
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
+      setInput('');
+      setMessages(prev => [...prev, { role: 'user', content: text }]);
+      setIsLoading(true);
+
+      const wakeTimer = hasAnswered.current ? null : setTimeout(() => setIsWaking(true), WAKE_THRESHOLD_MS);
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history }),
+        });
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        const data = await response.json();
+        hasAnswered.current = true;
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: data.response, cards: data.cards ?? [], sources: data.sources ?? [] },
+        ]);
+        setRevealed(0);
+      } catch (error) {
+        console.error('Error calling API:', error);
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Sorry, I couldn’t reach the assistant just now. Please try again in a moment.',
+            isError: true,
+          },
+        ]);
+      } finally {
+        if (wakeTimer) clearTimeout(wakeTimer);
+        setIsWaking(false);
+        setIsLoading(false);
+        inputRef.current?.focus();
+      }
+    },
+    [isLoading]
+  );
+
+  // Questions handed over from the landing page: /chatbot?q=...
+  useEffect(() => {
+    if (autoAsked.current) return;
+    autoAsked.current = true;
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) {
+      window.history.replaceState(null, '', '/chatbot');
+      send(q);
     }
-  };
+  }, [send]);
+
+  const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 via-zinc-950 to-rose-950 relative overflow-hidden" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-      {/* Backend Waking Loader with Floating Tech Facts */}
-      {isWakingBackend && (
-        <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-900/95 via-zinc-950/95 to-rose-950/95 backdrop-blur-sm">
-          {/* Animated background elements */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-            <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-rose-400/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
-          </div>
-
-          {/* Floating tech facts as bubbles */}
-          {floatingFacts.map((item) => (
-            <div
-              key={item.id}
-              className="absolute animate-float-bubble"
-              style={{
-                left: item.left,
-                top: item.top,
-                animationDelay: `${item.delay}s`,
-              }}
-            >
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/30 to-orange-500/30 rounded-2xl blur-xl"></div>
-                <div className="relative backdrop-blur-xl bg-slate-800/60 border border-rose-500/40 rounded-2xl p-4 shadow-2xl max-w-xs">
-                  <div className="flex items-start gap-2">
-                    <div className="shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center text-sm">
-                      💡
-                    </div>
-                    <p className="text-gray-100 text-sm leading-relaxed">
-                      {item.fact}
-                    </p>
-                  </div>
-                </div>
-              </div>
+    <div className="flex h-dvh flex-col bg-bg">
+      {/* Cold-start overlay */}
+      {isWaking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/85 px-5 backdrop-blur-md">
+          <div className="card animate-fade-up w-full max-w-md p-8 text-center">
+            <div className="relative mx-auto h-14 w-14">
+              <div className="absolute inset-0 rounded-full border-2 border-line" />
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-accent" />
+              <Sparkle className="absolute inset-0 m-auto h-5 w-5 text-accent" />
             </div>
-          ))}
-
-          {/* Central loading indicator */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center space-y-6">
-            <div className="relative inline-block">
-              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-full blur-2xl opacity-60 animate-pulse"></div>
-              <div className="relative w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-rose-500 via-orange-500 to-rose-600 flex items-center justify-center shadow-2xl">
-                <div className="w-14 h-14 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-              </div>
+            <h2 className="mt-6 text-lg font-medium text-fg">Waking up the inference server…</h2>
+            <p className="mt-1 font-mono text-xs text-faint">cold start · {wakeSeconds}s elapsed · usually under 60s</p>
+            <div className="mt-6 h-1 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-1000 ease-linear"
+                style={{ width: `${Math.min(95, (wakeSeconds / 60) * 100)}%` }}
+              />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold bg-gradient-to-r from-rose-400 via-orange-400 to-rose-500 bg-clip-text text-transparent">
-                Waking up the backend...
-              </h2>
-              <p className="text-gray-400 text-sm">
-                This may take up to 60 seconds
-              </p>
-            </div>
+            <p key={factIndex} className="animate-fade-up mt-6 text-sm leading-relaxed text-muted">
+              <span className="font-mono text-xs text-accent">did you know · </span>
+              {TECH_FACTS[factIndex]}
+            </p>
           </div>
         </div>
       )}
 
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-rose-400/5 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
-      </div>
-
-      {/* Header with glassmorphism */}
-      <div className="relative border-b border-rose-500/20 backdrop-blur-xl bg-black/30">
-        <div className="absolute inset-0 bg-gradient-to-r from-rose-500/5 via-transparent to-orange-500/5"></div>
-        <div className="relative max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-2xl blur-md group-hover:blur-lg transition-all opacity-60"></div>
-              {/* <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center text-2xl shadow-lg transform group-hover:scale-105 transition-transform">
-                💬
-              </div> */}
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-xl bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
-                S.A.C.H.I.N
-              </h1>
-              <p className="text-xs text-gray-400 font-medium">Smart Assistant for Career History & Information</p>
-            </div>
-          </div>
-          <a
+      {/* Header */}
+      <header className="border-b border-line bg-bg/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-4 px-5">
+          <Link
             href="/"
-            className="group relative px-5 py-2.5 rounded-xl overflow-hidden transition-all hover:scale-105"
+            className="inline-flex items-center gap-2 rounded-full px-2 py-1.5 text-sm text-muted transition-colors hover:text-fg"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-rose-500/20 to-orange-500/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="absolute inset-0 border border-rose-500/30 rounded-xl group-hover:border-rose-400/50 transition-colors"></div>
-            <span className="relative text-gray-300 group-hover:text-white transition-colors font-medium flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back
-            </span>
-          </a>
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Portfolio</span>
+          </Link>
+          <div className="text-center">
+            <h1 className="font-mono text-sm tracking-[0.25em] text-fg">
+              S.A.C.H.I.N<span className="text-accent">_</span>
+            </h1>
+          </div>
+          <Link href="/about" className="rounded-full px-2 py-1.5 text-sm text-muted transition-colors hover:text-fg">
+            How it works
+          </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto relative">
-        <div className="max-w-5xl mx-auto px-6 py-10">
-          {/* Initial Message with enhanced animation */}
-          {showInitialMessage && messages.length === 0 && (
-            <div className="flex justify-center items-center min-h-[65vh]">
-              <div className="text-center space-y-8 animate-fade-in">
-                <div className="relative inline-block">
-                  <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-full blur-2xl opacity-40 animate-pulse"></div>
-                  {/* <div className="relative w-28 h-28 mx-auto rounded-full bg-gradient-to-br from-rose-500 via-orange-500 to-rose-600 flex items-center justify-center text-5xl shadow-2xl transform hover:scale-110 transition-transform">
-                    💬
-                  </div> */}
-                </div>
-                <div className="space-y-4">
-                  <h2 className="text-3xl md:text-4xl font-semibold bg-gradient-to-r from-rose-400 via-orange-400 to-rose-500 bg-clip-text text-transparent leading-tight">
-                    {displayedText}
-                    <span className="animate-pulse text-rose-400">|</span>
-                  </h2>
-                  <p className="text-gray-400 text-base max-w-md mx-auto leading-relaxed">
-                    Ask me about skills, projects, experience, achievements, or anything else you'd like to know!
-                  </p>
-                  
-                  {/* Suggested prompts */}
-                  <div className="flex flex-wrap justify-center gap-3 pt-6">
-                    {['Show me your projects', 'What are your skills?', 'Tell me about your experience'].map((prompt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setInput(prompt)}
-                        className="group relative px-4 py-2 rounded-xl overflow-hidden transition-all hover:scale-105"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-rose-500/10 to-orange-500/10 group-hover:from-rose-500/20 group-hover:to-orange-500/20 transition-all"></div>
-                        <div className="absolute inset-0 border border-rose-500/20 rounded-xl group-hover:border-rose-400/40 transition-colors"></div>
-                        <span className="relative text-sm text-gray-400 group-hover:text-rose-300 transition-colors">
-                          {prompt}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {/* Conversation */}
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto overflow-x-hidden">
+        {isEmpty && (
+          <>
+            <div aria-hidden className="bg-grid pointer-events-none absolute inset-0" />
+            <div aria-hidden className="glow pointer-events-none absolute -top-56 left-1/2 h-[36rem] w-[56rem] -translate-x-1/2" />
+          </>
+        )}
+
+        <div className="relative mx-auto max-w-3xl px-5 py-10">
+          {isEmpty && (
+            <div className="flex min-h-[62vh] flex-col items-center justify-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line-strong bg-surface">
+                <Sparkle className="h-5 w-5 text-accent" />
               </div>
+              <h2 className="mt-7 min-h-[2.5em] max-w-xl text-3xl font-medium tracking-tight text-fg sm:min-h-0 sm:text-4xl">
+                {greeting}
+                <span className="caret ml-0.5 text-accent">▍</span>
+              </h2>
+              <p className="mt-3 max-w-md text-muted">
+                Grounded in my real experience, projects and résumé. Ask it anything you’d ask in an interview.
+              </p>
+              <div className="mt-10 grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+                {SUGGESTIONS.map(s => (
+                  <button
+                    key={s.label}
+                    onClick={() => send(s.label)}
+                    className="card card-hover group p-4 text-left"
+                  >
+                    <span className="flex items-center justify-between gap-3 text-[15px] text-fg">
+                      {s.label}
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-faint transition-colors group-hover:text-accent" />
+                    </span>
+                    <span className="mt-1 block font-mono text-xs text-faint">{s.hint}</span>
+                  </button>
+                ))}
+              </div>
+              <Link
+                href="/duel"
+                className="mt-6 inline-flex items-center gap-1.5 text-sm text-faint transition-colors hover:text-fg"
+              >
+                Or skip the questions: <span className="text-accent">challenge me to a résumé duel</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           )}
 
-          {/* Message List */}
-          {messages.map((message, index) => (
-            <div key={index} className="mb-8 animate-slide-up">
-              {message.role === 'user' ? (
-                // User message in a bubble on the right
-                <div className="flex justify-end">
-                  <div className="max-w-[75%] rounded-3xl px-6 py-4 bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/25">
-                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                  </div>
+          {messages.map((m, i) => {
+            const isLatest = i === messages.length - 1;
+            const typing = isLatest && m.role === 'assistant' && revealed !== null;
+            const shown = typing ? m.content.slice(0, revealed ?? undefined) : m.content;
+
+            if (m.role === 'user') {
+              return (
+                <div key={i} className="animate-fade-up mb-8 flex justify-end">
+                  <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-line-strong bg-surface-2 px-5 py-3 leading-relaxed text-fg">
+                    {m.content}
+                  </p>
                 </div>
-              ) : (
-                // Assistant message in free space on the left
-                <div className="space-y-4">
-                  <div className="prose text-lg prose-invert prose-xl max-w-none prose-headings:text-rose-300 prose-headings:font-bold prose-headings:tracking-tight prose-h1:text-5xl prose-h1:mb-6 prose-h1:mt-8 prose-h2:text-4xl prose-h2:mb-5 prose-h2:mt-7 prose-h3:text-3xl prose-h3:mb-4 prose-h3:mt-6 prose-p:text-gray-100 prose-p:leading-loose prose-p:mb-5 prose-p:text-xl prose-strong:text-white prose-strong:font-bold prose-strong:text-2xl prose-em:text-gray-300 prose-em:italic prose-ul:text-gray-100 prose-ul:my-5 prose-ul:space-y-3 prose-ol:text-gray-100 prose-ol:my-5 prose-ol:space-y-3 prose-li:text-gray-100 prose-li:leading-loose prose-li:text-xl prose-code:text-rose-300 prose-code:bg-slate-800/50 prose-code:px-2 prose-code:py-1 prose-code:rounded prose-code:font-mono prose-code:text-lg prose-code:font-normal prose-pre:bg-slate-800/50 prose-pre:border prose-pre:border-rose-500/20 prose-pre:rounded-xl prose-pre:p-4 prose-blockquote:border-l-4 prose-blockquote:border-rose-400 prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-gray-300 prose-blockquote:my-6 prose-blockquote:text-xl prose-a:text-rose-400 prose-a:no-underline prose-a:font-medium hover:prose-a:text-rose-300 prose-a:transition-colors prose-hr:border-rose-500/20 prose-hr:my-8" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.displayedContent || message.content}
-                    </ReactMarkdown>
-                    {message.isTyping && (
-                      <span className="inline-block w-1 h-5 bg-rose-400 animate-pulse ml-1"></span>
-                    )}
+              );
+            }
+
+            return (
+              <div key={i} className="animate-fade-up mb-10 flex gap-4">
+                <div
+                  className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                    m.isError ? 'border-red-400/30 text-red-300' : 'border-line-strong text-accent'
+                  } bg-surface`}
+                >
+                  <Sparkle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="prose prose-invert max-w-none [overflow-wrap:anywhere] prose-table:block prose-table:overflow-x-auto prose-pre:overflow-x-auto prose-headings:font-medium prose-headings:tracking-tight prose-headings:text-fg prose-h2:mb-3 prose-h2:mt-1 prose-h2:text-2xl prose-h3:mt-6 prose-h3:text-lg prose-p:leading-relaxed prose-p:text-muted prose-a:text-accent prose-a:no-underline hover:prose-a:underline prose-strong:font-medium prose-strong:text-fg prose-code:rounded prose-code:bg-surface-2 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[0.85em] prose-code:font-normal prose-code:text-accent prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-line prose-pre:bg-surface prose-blockquote:border-l-accent prose-blockquote:font-normal prose-blockquote:not-italic prose-blockquote:text-muted prose-li:text-muted prose-li:marker:text-faint prose-hr:border-line">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{shown}</ReactMarkdown>
                   </div>
-                  
-                  {/* Render structured data */}
-                  {message.structuredData && !message.isTyping && (
-                    <div className="mt-6 space-y-3">
-                      {message.structuredData.type === 'projects' && (
-                        <div className="grid gap-4">
-                          {message.structuredData.data.map((project: any) => (
-                            <div key={project.id} className="group relative rounded-2xl overflow-hidden backdrop-blur-sm bg-slate-800/30 border border-rose-500/20 hover:border-rose-400/40 transition-all p-5 hover:shadow-lg hover:shadow-rose-500/10">
-                              <h3 className="text-white font-semibold text-lg mb-2 group-hover:text-rose-300 transition-colors">
-                                {project.name}
-                              </h3>
-                              <p className="text-gray-300 text-sm mb-3 leading-relaxed">{project.description}</p>
-                              <div className="flex flex-wrap gap-2 mb-3">
-                                {project.tags.map((tag: string, idx: number) => (
-                                  <span key={idx} className="px-3 py-1 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-medium border border-rose-500/30">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                              {project.link && (
-                                <a href={project.link} target="_blank" rel="noopener noreferrer" 
-                                   className="inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300 text-sm font-medium transition-colors">
-                                  View Project
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {message.structuredData.type === 'skills' && (
-                        <div className="flex flex-wrap gap-2">
-                          {message.structuredData.data.map((skill: string, idx: number) => (
-                            <span key={idx} className="px-4 py-2 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 border border-rose-500/30 text-rose-200 font-medium text-sm hover:scale-105 transition-transform">
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {message.structuredData.type === 'achievements' && (
-                        <div className="grid gap-3">
-                          {message.structuredData.data.map((achievement: any, idx: number) => (
-                            <div key={idx} className="rounded-2xl backdrop-blur-sm bg-slate-800/30 border border-rose-500/20 p-4">
-                              <div className="flex items-start gap-3">
-                                <span className="text-2xl">🏆</span>
-                                <div className="flex-1">
-                                  <h3 className="text-white font-semibold text-base mb-1">{achievement.title}</h3>
-                                  <p className="text-gray-300 text-sm mb-2 leading-relaxed">{achievement.description}</p>
-                                  <span className="text-rose-400 text-xs font-medium">{achievement.date}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {message.structuredData.type === 'experience' && (
-                        <div className="grid gap-3">
-                          {message.structuredData.data.map((exp: any, idx: number) => (
-                            <div key={idx} className="rounded-2xl backdrop-blur-sm bg-slate-800/30 border border-rose-500/20 p-5">
-                              <h3 className="text-white font-semibold text-lg mb-1">{exp.role}</h3>
-                              <p className="text-rose-400 font-medium text-sm mb-2">{exp.company}</p>
-                              <p className="text-gray-400 text-xs mb-3">{exp.start_date} - {exp.end_date || 'Present'}</p>
-                              <p className="text-gray-300 text-sm leading-relaxed">{exp.description}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {message.structuredData.type === 'socials' && (
-                        <div className="grid gap-2">
-                          {message.structuredData.data.map((social: any, idx: number) => (
-                            <a key={idx} href={social.link} target="_blank" rel="noopener noreferrer"
-                               className="flex items-center gap-3 rounded-xl backdrop-blur-sm bg-slate-800/30 border border-rose-500/20 hover:border-rose-400/40 p-4 transition-all hover:scale-[1.02]">
-                              <span className="text-xl">{social.icon || '🔗'}</span>
-                              <div className="flex-1">
-                                <p className="text-white font-medium text-sm">{social.platform}</p>
-                              </div>
-                              <svg className="w-4 h-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {message.structuredData.type === 'resume' && (
-                        <div className="group relative rounded-2xl overflow-hidden backdrop-blur-sm bg-slate-800/30 border border-rose-500/20 hover:border-rose-400/40 transition-all p-5 hover:shadow-lg hover:shadow-rose-500/10">
-                          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                          <div className="relative">
-                            <div className="flex items-start gap-4 mb-4">
-                              <div className="relative shrink-0">
-                                <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-xl blur-md opacity-50 group-hover:opacity-70 transition-opacity"></div>
-                                <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center shadow-lg">
-                                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <h3 className="text-white font-semibold text-lg mb-2 group-hover:text-rose-300 transition-colors">
-                                  My Professional Resume
-                                </h3>
-                                <p className="text-gray-300 text-sm leading-relaxed mb-3">
-                                  Download my complete resume to learn more about my professional background, technical skills, work experience, and achievements.
-                                </p>
-                                <div className="flex items-center gap-2 text-gray-400 text-xs mb-4">
-                                  <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">PDF Format</span>
-                                  <span>•</span>
-                                  <span>{message.structuredData.data.filename}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <a 
-                              href={message.structuredData.data.url} 
-                              download={message.structuredData.data.filename}
-                              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 text-white font-medium hover:from-rose-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-rose-500/50 hover:scale-[1.02]"
-                            >
-                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                              Download Resume
-                            </a>
-                          </div>
-                        </div>
-                      )}
+                  {typing && <span className="caret inline-block h-4 w-2 bg-accent/80" />}
+                  {!typing && m.cards?.map(card => <CardView key={card.type} data={card} />)}
+                  {!typing && !!m.sources?.length && (
+                    <div className="mt-5 flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-faint">Sources</span>
+                      {m.sources.map(s => (
+                        <span key={s.id} className="chip" title={s.id}>
+                          {s.title}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
-
-          {/* Enhanced Loading Indicator */}
-          {isLoading && (
-            <div className="mb-8 animate-slide-up">
-              <div className="flex items-center gap-3">
-                <div className="flex gap-1.5">
-                  <div className="w-2.5 h-2.5 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2.5 h-2.5 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2.5 h-2.5 bg-gradient-to-br from-rose-400 to-orange-400 rounded-full animate-bounce shadow-lg" style={{ animationDelay: '300ms' }}></div>
-                </div>
-                <span className="text-gray-400 text-sm">Thinking...</span>
               </div>
+            );
+          })}
+
+          {isLoading && (
+            <div className="mb-10 flex items-center gap-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-surface">
+                <Sparkle className="h-4 w-4 animate-pulse text-accent" />
+              </div>
+              <span className="font-mono text-xs text-faint">retrieving context · generating…</span>
             </div>
           )}
-
-          <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Enhanced Input Area with glassmorphism */}
-      <div className="relative border-t border-rose-500/20 backdrop-blur-xl bg-black/30">
-        <div className="absolute inset-0 bg-gradient-to-r from-rose-500/5 via-transparent to-orange-500/5"></div>
-        <div className="relative max-w-5xl mx-auto px-6 py-6">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-gradient-to-r from-rose-500/20 to-orange-500/20 rounded-3xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-            <div className="relative">
-              <textarea
-                ref={inputRef as any}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask me anything..."
-                className="w-full backdrop-blur-xl bg-slate-800/50 border border-rose-500/30 rounded-3xl px-7 py-5 pr-16 text-white placeholder-gray-400 focus:outline-none focus:border-rose-400/50 focus:bg-slate-800/70 transition-all shadow-lg resize-none min-h-[60px] max-h-[200px]"
-                disabled={isLoading}
-                rows={1}
-                style={{ overflow: 'auto' }}
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={!input.trim() || isLoading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 group/btn"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-2xl blur-md opacity-60 group-hover/btn:opacity-100 group-hover/btn:blur-lg transition-all"></div>
-                <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transform group-hover/btn:scale-105 transition-all">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-                  </svg>
-                </div>
-              </button>
-            </div>
-          </div>
-          <p className="text-sm text-center text-gray-500 mt-4 leading-relaxed">
-            2026 Sachin Suresh© All rights reserved.
+      {/* Composer */}
+      <div className="border-t border-line bg-bg">
+        <div className="mx-auto max-w-3xl px-5 pb-5 pt-4">
+          <form
+            onSubmit={e => {
+              e.preventDefault();
+              send(input);
+            }}
+            className="flex items-end gap-2 rounded-2xl border border-line-strong bg-surface p-2 pl-4 transition-colors focus-within:border-accent/60"
+          >
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  send(input);
+                }
+              }}
+              placeholder="Ask about projects, experience, skills…"
+              aria-label="Message"
+              rows={1}
+              disabled={isLoading}
+              className="max-h-[200px] min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-base leading-relaxed sm:text-[15px] text-fg placeholder:text-faint focus:outline-none disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              aria-label="Send"
+              disabled={!input.trim() || isLoading}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-ink transition-all hover:scale-105 disabled:scale-100 disabled:opacity-30"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </form>
+          <p className="mt-3 text-center font-mono text-[11px] text-faint">
+            Hybrid RAG over my portfolio · Groq LLM · type <span className="text-muted">/about</span> for the architecture
           </p>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        @keyframes float-bubble {
-          0%, 100% {
-            transform: translateY(0) translateX(0) scale(1);
-            opacity: 0;
-          }
-          10% {
-            opacity: 1;
-          }
-          50% {
-            transform: translateY(-30px) translateX(20px) scale(1.05);
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(-60px) translateX(-10px) scale(0.95);
-            opacity: 0;
-          }
-        }
-        
-        .animate-slide-up {
-          animation: slide-up 0.4s ease-out;
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out;
-        }
-        
-        .animate-float-bubble {
-          animation: float-bubble 8s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
+}
+
+function CardView({ data }: { data: Card }) {
+  switch (data.type) {
+    case 'projects':
+      return (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {data.data.map(p => (
+            <a
+              key={p.id}
+              href={p.link ?? p.github ?? '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`card card-hover group block p-5 ${p.featured ? 'sm:col-span-2' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-medium text-fg">{p.name}</h3>
+                  {p.tagline && <p className="mt-0.5 font-serif italic text-muted">{p.tagline}</p>}
+                </div>
+                {(p.link || p.github) && (
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-faint transition-colors group-hover:text-accent" />
+                )}
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">{p.description}</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {p.tags.map(t => (
+                  <span key={t} className="chip">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </a>
+          ))}
+        </div>
+      );
+
+    case 'skills':
+      if (data.groups?.length) {
+        return (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {data.groups.map(g => (
+              <div key={g.category} className="card p-5">
+                <h3 className="font-mono text-xs uppercase tracking-[0.18em] text-accent">{g.category}</h3>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {g.items.map(s => (
+                    <span key={s} className="chip text-fg/80">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {data.data.map(s => (
+            <span key={s} className="chip text-fg/80">
+              {s}
+            </span>
+          ))}
+        </div>
+      );
+
+    case 'experience':
+      return (
+        <div className="mt-5 space-y-3">
+          {data.data.map(e => (
+            <div key={e.company} className="card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-medium text-fg">{e.role}</h3>
+                  <p className="text-sm text-muted">
+                    {e.company}
+                    {e.mode && <span className="text-faint"> · {e.mode}</span>}
+                  </p>
+                </div>
+                <span className="font-mono text-xs text-faint">
+                  {e.start_date} – {e.end_date ?? 'Present'}
+                </span>
+              </div>
+              <ul className="mt-4 space-y-2">
+                {(e.highlights ?? [e.description]).map(h => (
+                  <li key={h} className="flex gap-2.5 text-sm leading-relaxed text-muted">
+                    <span aria-hidden className="mt-[0.55rem] h-1 w-1 shrink-0 rounded-full bg-accent/70" />
+                    {h}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      );
+
+    case 'achievements':
+      return (
+        <ul className="card mt-5 divide-y divide-line">
+          {data.data.map(a => (
+            <li key={a.title} className="p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-medium text-fg">{a.title}</h3>
+                <span className="font-mono text-xs text-faint">{a.date}</span>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-muted">{a.description}</p>
+            </li>
+          ))}
+        </ul>
+      );
+
+    case 'socials':
+      return (
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {data.data.map(s => (
+            <a
+              key={s.platform}
+              href={s.link}
+              target={s.link.startsWith('mailto:') ? undefined : '_blank'}
+              rel="noopener noreferrer"
+              className="card card-hover group flex items-center gap-3 p-4"
+            >
+              <SocialIcon platform={s.platform} className="h-4 w-4 text-muted group-hover:text-fg" />
+              <span className="flex-1 text-sm text-fg">{s.platform}</span>
+              <ArrowUpRight className="h-4 w-4 text-faint group-hover:text-accent" />
+            </a>
+          ))}
+        </div>
+      );
+
+    case 'resume':
+      return (
+        <div className="card mt-5 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <h3 className="font-medium text-fg">Résumé</h3>
+            <p className="font-mono text-xs text-faint">PDF · {data.data.filename}</p>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={data.data.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-line-strong px-4 py-2 text-sm text-fg transition-colors hover:bg-white/5"
+            >
+              View
+            </a>
+            <a
+              href={data.data.url}
+              download={data.data.filename}
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-ink"
+            >
+              <Download className="h-4 w-4" /> Download
+            </a>
+          </div>
+        </div>
+      );
+  }
 }

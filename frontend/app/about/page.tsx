@@ -1,251 +1,173 @@
-'use client';
-import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import type { Metadata } from 'next';
+import Reveal from '@/components/Reveal';
+import { ArrowLeft, ArrowRight, Sparkle } from '@/components/Icons';
+
+export const metadata: Metadata = {
+  title: 'How S.A.C.H.I.N works | Sachin Suresh',
+  description: 'Architecture of the retrieval-augmented assistant behind this portfolio.',
+  openGraph: { title: 'How S.A.C.H.I.N works | Sachin Suresh', description: 'Architecture of the retrieval-augmented assistant behind this portfolio.', url: '/about' },
+  twitter: { card: 'summary_large_image', title: 'How S.A.C.H.I.N works | Sachin Suresh', description: 'Architecture of the retrieval-augmented assistant behind this portfolio.' },
+};
+
+const PIPELINE = [
+  {
+    step: 'Ingest',
+    detail: 'portfolio_data.json is split into one self-contained document per project, role, achievement, skill set and profile.',
+    tech: 'Python',
+  },
+  {
+    step: 'Index',
+    detail: 'Each document is indexed twice: BM25 for exact terms and names, and dense bge-small embeddings for meaning.',
+    tech: 'rank-bm25 · fastembed (ONNX)',
+  },
+  {
+    step: 'Retrieve',
+    detail: 'Both rankings are fused with Reciprocal Rank Fusion. Follow-ups are expanded with the previous question so “it” resolves.',
+    tech: 'Hybrid RRF · top-6',
+  },
+  {
+    step: 'Generate',
+    detail: 'The LLM answers from that context plus recent chat history, and returns strict JSON: answer, cards and sources.',
+    tech: 'Groq · GPT-OSS 120B',
+  },
+  {
+    step: 'Render',
+    detail: 'The answer renders as Markdown; requested cards are resolved server-side from the real data, never from the LLM.',
+    tech: 'Next.js · React',
+  },
+];
+
+const STACK = [
+  { group: 'Frontend', items: ['Next.js 16', 'React 19', 'TypeScript', 'Tailwind CSS 4'] },
+  { group: 'Backend', items: ['FastAPI', 'Python 3.11', 'Uvicorn', 'Pydantic'] },
+  { group: 'AI / Retrieval', items: ['Groq API', 'GPT-OSS 120B', 'BM25', 'bge-small-en-v1.5', 'RRF', 'Structured outputs'] },
+];
+
+const PROPERTIES = [
+  {
+    title: 'Grounded, with sources',
+    body: 'The model may only state facts found in retrieved context, and every answer lists the documents it relied on.',
+  },
+  {
+    title: 'No keyword routing',
+    body: 'The model itself decides when cards help (and which ones, e.g. only the RAG projects) via a schema-enforced reply.',
+  },
+  {
+    title: 'Measured, not guessed',
+    body: 'A labelled eval set compares retrievers: hybrid RRF puts the right document in the top 6 for 40/40 questions, vs 34/40 for the old TF-IDF.',
+  },
+  {
+    title: 'Cheap to run',
+    body: 'No GPU, no vector database: a 33M-parameter ONNX embedder and an in-memory index over a single JSON file.',
+  },
+];
 
 export default function About() {
-  const [displayedText, setDisplayedText] = useState('');
-  const [isTypingComplete, setIsTypingComplete] = useState(false);
-  const [visibleSections, setVisibleSections] = useState<number[]>([]);
-
-  const fullText = 'AI-Powered Portfolio Assistant';
-
-  /* ---------------- Typewriter Effect ---------------- */
-  useEffect(() => {
-    if (displayedText.length < fullText.length) {
-      const t = setTimeout(() => {
-        setDisplayedText(fullText.slice(0, displayedText.length + 1));
-      }, 50);
-      return () => clearTimeout(t);
-    }
-    if (displayedText.length === fullText.length) {
-      setIsTypingComplete(true);
-    }
-  }, [displayedText]);
-
-  /* ------------- Sequential Section Reveal ------------ */
-
-const currentSectionRef = useRef(1);
-const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-useEffect(() => {
-  if (!isTypingComplete) return;
-
-  // 🔒 Force section 0 immediately
-  setVisibleSections([0]);
-  currentSectionRef.current = 1;
-
-  const reveal = () => {
-    setVisibleSections(prev => [...prev, currentSectionRef.current]);
-    currentSectionRef.current += 1;
-
-    if (currentSectionRef.current < 5) {
-      timeoutRef.current = setTimeout(reveal, 300);
-    }
-  };
-
-  timeoutRef.current = setTimeout(reveal, 300);
-
-  return () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  };
-}, [isTypingComplete]);
-
-
-
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-900 via-zinc-950 to-rose-950 relative overflow-hidden"
-      style={{ fontFamily: "'Times New Roman', Times, serif" }}
-    >
-      {/* Background Orbs */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-rose-400/5 rounded-full blur-3xl animate-pulse delay-2000" />
-      </div>
+    <div className="relative min-h-screen overflow-x-clip">
+      <div aria-hidden className="bg-grid pointer-events-none absolute inset-0 h-[40rem]" />
+      <div aria-hidden className="glow pointer-events-none absolute -top-48 left-1/2 h-[36rem] w-[56rem] -translate-x-1/2" />
 
-      {/* Header */}
-      <header className="relative border-b border-rose-500/20 backdrop-blur-xl bg-black/30">
-        <div className="max-w-5xl mx-auto px-6 py-5 flex justify-between items-center">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-rose-400 to-orange-400 bg-clip-text text-transparent">
-            About S.A.C.H.I.N
-          </h1>
-
-          <a
-            href="/chatbot"
-            className="px-5 py-2.5 rounded-xl border border-rose-500/30 text-gray-300 hover:text-white hover:border-rose-400/50 transition"
-          >
-            ← Back to Chat
-          </a>
+      <header className="relative border-b border-line">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5 sm:px-8">
+          <Link href="/" className="font-mono text-sm tracking-tight text-fg">
+            sachin<span className="text-accent">.</span>suresh
+          </Link>
+          <Link href="/chatbot" className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-fg">
+            <ArrowLeft className="h-4 w-4" /> Back to chat
+          </Link>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="max-w-5xl mx-auto px-6 py-10 space-y-8 relative">
-        {/* Hero */}
-        <section className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-rose-400 via-orange-400 to-rose-400 bg-clip-text text-transparent min-h-[4rem]">
-            {displayedText}
-            {displayedText.length < fullText.length && (
-              <span className="inline-block w-1 h-12 bg-rose-400 ml-2 animate-pulse" />
-            )}
-          </h2>
-
-          {isTypingComplete && (
-            <p className="mt-4 text-white text-xl max-w-2xl mx-auto animate-fade-in">
-              An intelligent chatbot leveraging Retrieval-Augmented Generation
-              to transform static portfolio data into dynamic conversations.
-            </p>
-          )}
+      <main className="relative mx-auto max-w-5xl px-5 pb-28 sm:px-8">
+        <section className="pb-16 pt-20 md:pt-28">
+          <p className="animate-fade-up font-mono text-xs uppercase tracking-[0.2em] text-faint">
+            <span className="text-accent">S.A.C.H.I.N</span> · architecture
+          </p>
+          <h1
+            className="animate-fade-up mt-5 max-w-3xl text-4xl font-medium leading-[1.08] tracking-[-0.03em] text-fg sm:text-5xl md:text-6xl"
+            style={{ animationDelay: '80ms' }}
+          >
+            A portfolio you can <span className="font-serif font-normal italic text-accent">interview.</span>
+          </h1>
+          <p className="animate-fade-up mt-6 max-w-2xl text-lg leading-relaxed text-muted" style={{ animationDelay: '160ms' }}>
+            The assistant behind this portfolio is a small retrieval-augmented generation system: it
+            turns static portfolio data into grounded, conversational answers.
+          </p>
         </section>
 
-        {/* Section 0 */}
-        {visibleSections.includes(0) && (
-          <section className="glass-card animate-slide-up">
-            <h3 className="section-title">💡 The Concept</h3>
-            <p>
-              <strong>S.A.C.H.I.N</strong> is an AI-powered portfolio assistant
-              built using <strong>Retrieval-Augmented Generation (RAG)</strong>.
+        {/* Pipeline */}
+        <section className="py-12">
+          <Reveal>
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-faint">Request pipeline</h2>
+          </Reveal>
+          <ol className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-5">
+            {PIPELINE.map((p, i) => (
+              <Reveal as="li" key={p.step} delay={i * 80} className="relative flex flex-col bg-bg p-5">
+                <span className="font-mono text-xs text-accent">0{i + 1}</span>
+                <h3 className="mt-3 text-lg font-medium text-fg">{p.step}</h3>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{p.detail}</p>
+                <p className="mt-5 font-mono text-[11px] text-faint">{p.tech}</p>
+                {i < PIPELINE.length - 1 && (
+                  <ArrowRight className="absolute right-3 top-5 hidden h-4 w-4 text-faint md:block" />
+                )}
+              </Reveal>
+            ))}
+          </ol>
+          <Reveal className="mt-4">
+            <p className="font-mono text-xs text-faint">
+              browser → Next.js route <span className="text-muted">/api/chat</span> → FastAPI{' '}
+              <span className="text-muted">/api/chat</span> → retriever → LLM → Markdown + structured cards
             </p>
-            <p>
-              Users interact conversationally instead of browsing static pages,
-              receiving accurate, contextual answers instantly.
-            </p>
-          </section>
-        )}
+          </Reveal>
+        </section>
 
-        {/* Section 1 */}
-        {visibleSections.includes(1) && (
-          <section className="glass-card animate-slide-up">
-            <h3 className="section-title">⚡ Technology Stack</h3>
+        {/* Properties */}
+        <section className="py-12">
+          <Reveal>
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-faint">Design choices</h2>
+          </Reveal>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {PROPERTIES.map((p, i) => (
+              <Reveal key={p.title} delay={(i % 2) * 80} className="card card-hover p-6">
+                <h3 className="font-medium text-fg">{p.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">{p.body}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
 
-            <p className="text-white text-xl mb-3">Frontend</p>
-            <div className="chip-group">
-              {['Next.js 15', 'React 19', 'TypeScript', 'Tailwind CSS'].map(t => (
-                <span key={t} className="chip">{t}</span>
-              ))}
-            </div>
+        {/* Stack */}
+        <section className="py-12">
+          <Reveal>
+            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-faint">Stack</h2>
+          </Reveal>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {STACK.map((s, i) => (
+              <Reveal key={s.group} delay={i * 80} className="card p-6">
+                <h3 className="font-mono text-xs uppercase tracking-[0.18em] text-accent">{s.group}</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {s.items.map(item => (
+                    <span key={item} className="chip text-fg/80">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
 
-            <p className="text-white  text-xl mt-6 mb-3">Backend</p>
-            <div className="chip-group">
-              {['FastAPI', 'Python 3.11+', 'Uvicorn'].map(t => (
-                <span key={t} className="chip">{t}</span>
-              ))}
-            </div>
-
-            <p className="text-white text-xl mt-6 mb-3">AI / ML</p>
-            <div className="chip-group">
-              {['Groq API', 'LLaMA 3.3 70B', 'FAISS', 'RAG', 'MiniLM'].map(t => (
-                <span key={t} className="chip">{t}</span>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Section 2 */}
-        {visibleSections.includes(2) && (
-          <section className="glass-card animate-slide-up">
-            <h3 className="section-title">🔍 RAG Pipeline</h3>
-            <ol className="space-y-3 text-gray-300 text-lg list-decimal list-inside">
-              <li>Portfolio data ingestion & preprocessing</li>
-              <li>Embedding via Sentence Transformers</li>
-              <li>Vector indexing with FAISS</li>
-              <li>Semantic retrieval on user query</li>
-              <li>Grounded response generation</li>
-            </ol>
-          </section>
-        )}
-
-        {/* Section 3 */}
-        {visibleSections.includes(3) && (
-          <section className="glass-card animate-slide-up">
-            <h3 className="section-title">✨ Key Capabilities</h3>
-            <ul className="grid md:grid-cols-2 gap-4 text-gray-300">
-              <li>🎯 Context-aware retrieval</li>
-              <li>💬 Natural language interaction</li>
-              <li>⚡ Sub-second responses</li>
-              <li>🔒 Hallucination-resistant answers</li>
-            </ul>
-          </section>
-        )}
-
-        {/* Section 4 */}
-        {visibleSections.includes(4) && (
-          <section className="glass-card animate-slide-up">
-            <h3 className="section-title">🚀 Why This Approach?</h3>
-            <p>
-              Traditional portfolios are passive. RAG-based chat makes exploration
-              active, trustworthy, and memorable—while showcasing real ML
-              engineering depth.
-            </p>
-          </section>
-        )}
+        <Reveal className="pt-12 text-center">
+          <Link
+            href="/chatbot"
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-ink transition-transform hover:scale-[1.03]"
+          >
+            <Sparkle className="h-4 w-4" /> Try it
+          </Link>
+        </Reveal>
       </main>
-
-      {/* Animations */}
-      <style jsx>{`
-        .glass-card {
-          backdrop-filter: blur(16px);
-          background: rgba(30, 30, 40, 0.35);
-          border: 1px solid rgba(244, 114, 182, 0.25);
-          border-radius: 1.5rem;
-          padding: 2rem;
-          color: #e5e7eb;
-        }
-
-        .section-title {
-          font-size: 1.875rem;
-          font-weight: 700;
-          color: #f9a8d4;
-          margin-bottom: 1rem;
-        }
-
-        .chip-group {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.75rem;
-        }
-
-        .chip {
-          padding: 0.5rem 1rem;
-          border-radius: 999px;
-          background: linear-gradient(
-            135deg,
-            rgba(244, 114, 182, 0.25),
-            rgba(251, 146, 60, 0.25)
-          );
-          border: 1px solid rgba(244, 114, 182, 0.35);
-        }
-
-        .animate-slide-up {
-          animation: slideUp 0.4s ease-out;
-        }
-
-        .animate-fade-in {
-          animation: fadeIn 0.6s ease-out;
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.96);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-      `}</style>
     </div>
   );
 }
