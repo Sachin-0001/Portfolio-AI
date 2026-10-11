@@ -70,31 +70,34 @@ body {
   );
 }
 
-.card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
-  border: 1px solid var(--line);
-  border-radius: 1.25rem;
-}
+/* In the components layer so Tailwind utilities on the same element (borders, text colours, whitespace) win */
+@layer components {
+  .card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+    border: 1px solid var(--line);
+    border-radius: 1.25rem;
+  }
 
-.card-hover {
-  transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
-}
-.card-hover:hover {
-  border-color: var(--line-strong);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
-}
+  .card-hover {
+    transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
+  }
+  .card-hover:hover {
+    border-color: var(--line-strong);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+  }
 
-.chip {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 999px;
-  padding: 0.2rem 0.65rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--muted);
-  white-space: nowrap;
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 999px;
+    padding: 0.2rem 0.65rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
 }
 
 /* Scroll reveal (see components/Reveal.tsx) */

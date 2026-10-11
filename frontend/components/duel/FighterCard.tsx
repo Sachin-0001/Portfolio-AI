@@ -65,17 +65,19 @@ export default function FighterCard({
       </p>
       <div className="relative mt-4 flex items-center gap-4">
         <Avatar name={fighter.name} url={fighter.github?.avatar_url} side={side} />
-        <div className="min-w-0">
-          <h3 className="truncate text-xl font-medium text-fg sm:text-2xl">{fighter.name}</h3>
-          <p className="mt-0.5 line-clamp-2 text-sm text-muted">{fighter.headline}</p>
+        <div className="min-w-0 flex-1">
+          {/* Two lines rather than truncate: at 320px a full name only gets ~150px next to the avatar */}
+          <h3 className="line-clamp-2 text-xl font-medium leading-tight text-fg [overflow-wrap:anywhere] sm:text-2xl">{fighter.name}</h3>
+          <p className="mt-0.5 line-clamp-2 text-sm text-muted [overflow-wrap:anywhere]">{fighter.headline}</p>
           {fighter.github ? (
             <a
               href={fighter.github.profile_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1.5 inline-flex items-center gap-1.5 font-mono text-xs text-faint hover:text-fg"
+              className="mt-1.5 inline-flex max-w-full items-center gap-1.5 font-mono text-xs text-faint hover:text-fg"
             >
-              <GitHub className="h-3 w-3" />@{fighter.github.username}
+              <GitHub className="h-3 w-3 shrink-0" />
+              <span className="truncate">@{fighter.github.username}</span>
             </a>
           ) : (
             <p className="mt-1.5 font-mono text-xs text-faint">no GitHub found</p>

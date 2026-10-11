@@ -1,5 +1,6 @@
-"""Public duel history in Postgres (Supabase). Every duel is stored, but only headline facts:
-a display name, headline, GitHub avatar and scores. Never résumé text, evidence quotes or commentary."""
+"""Public duel history in Postgres (Supabase). One entry per person (a rematch updates it), holding headline
+facts only: a display name, headline, GitHub avatar and scores. Never résumé text, evidence quotes, commentary
+or email; identity_hash is a keyed hash (see identity.py) and is never selected for the public wall."""
 import logging
 import threading
 import time
@@ -33,6 +34,14 @@ create table if not exists public.duels (
   rounds jsonb not null
 );
 create index if not exists duels_created_at_idx on public.duels (created_at desc);
+alter table public.duels add column if not exists identity_hash text;
+alter table public.duels add column if not exists updated_at timestamptz not null default now();
+alter table public.duels add column if not exists duel_count integer not null default 1;
+-- Rows from before identities existed got the migration time as updated_at; give them back their own.
+-- Rows without an identity are never updated, so after that first run this matches nothing.
+update public.duels set updated_at = created_at where identity_hash is null and updated_at <> created_at;
+create unique index if not exists duels_identity_hash_key on public.duels (identity_hash) where identity_hash is not null;
+create index if not exists duels_updated_at_idx on public.duels (updated_at desc);
 alter table public.duels enable row level security;
 """
 
@@ -107,15 +116,23 @@ class DuelHistory:
         with self._connect() as conn:
             conn.execute(SCHEMA)
 
-    def record(self, row: Dict) -> str:
+    def record(self, row: Dict, identity_hash: Optional[str] = None) -> Dict:
+        """Upserts one row per person. A rematch overwrites the public columns, bumps duel_count and
+        updated_at, and keeps created_at from the first duel. Without an identity it's a one-off insert."""
         cols = list(row)
         values = [Jsonb(row[c]) if c == 'rounds' else row[c] for c in cols]
-        sql = f"insert into public.duels ({', '.join(cols)}) values ({', '.join(['%s'] * len(cols))}) returning id"
+        updates = ', '.join(f'{c} = excluded.{c}' for c in cols)
+        # xmax is 0 only on a freshly inserted tuple; the update path leaves this transaction's id there
+        sql = f"""insert into public.duels ({', '.join(cols)}, identity_hash)
+                  values ({', '.join(['%s'] * len(cols))}, %s)
+                  on conflict (identity_hash) where identity_hash is not null do update
+                  set {updates}, updated_at = now(), duel_count = public.duels.duel_count + 1
+                  returning id, (xmax = 0) as inserted"""
         with self._connect() as conn:
-            new_id = conn.execute(sql, values).fetchone()['id']
+            saved = conn.execute(sql, [*values, identity_hash]).fetchone()
         with self._lock:
             self._cache.clear()
-        return str(new_id)
+        return {'id': str(saved['id']), 'rematch': not saved['inserted']}
 
     def recent(self, limit: int = 24) -> Dict:
         with self._lock:
@@ -124,9 +141,9 @@ class DuelHistory:
                 return hit[1]
         with self._connect() as conn:
             duels = conn.execute(
-                """select id, created_at, challenger_name, challenger_headline, challenger_github, challenger_avatar,
-                          challenger_total, sachin_total, winner, decision, rounds
-                   from public.duels order by created_at desc limit %s""",
+                """select id, created_at, updated_at, duel_count, challenger_name, challenger_headline,
+                          challenger_github, challenger_avatar, challenger_total, sachin_total, winner, decision, rounds
+                   from public.duels order by updated_at desc limit %s""",
                 (limit,),
             ).fetchall()
             record = conn.execute(

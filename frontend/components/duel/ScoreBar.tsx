@@ -12,7 +12,8 @@ export default function ScoreBar({
 }: {
   value: number;
   color: string;
-  align?: 'left' | 'right';
+  /** 'right-sm' fills from the left on phones (stacked layout) and from the right from sm up */
+  align?: 'left' | 'right' | 'right-sm';
   dim?: boolean;
   height?: number;
 }) {
@@ -26,7 +27,7 @@ export default function ScoreBar({
   return (
     <div className="w-full overflow-hidden rounded-full bg-white/[0.06]" style={{ height }}>
       <div
-        className={`score-fill h-full rounded-full ${align === 'right' ? 'ml-auto' : ''}`}
+        className={`score-fill h-full rounded-full ${align === 'right' ? 'ml-auto' : align === 'right-sm' ? 'sm:ml-auto' : ''}`}
         style={{ width: `${shown}%`, background: color, opacity: dim ? 0.45 : 1 }}
       />
     </div>

@@ -30,10 +30,19 @@ def side(score, evidence=()):
     return {'score': score, 'evidence': list(evidence)}
 
 
+def academics_side(score, evidence=(), grades=None, points=None):
+    # grades == the single achievement's points == score keeps the combined round score equal to `score`
+    # (for a fighter with no parseable CGPA and one achievement)
+    return {'grades': score if grades is None else grades,
+            'achievement_points': [{'index': 0, 'points': score}] if points is None else points,
+            'evidence': list(evidence)}
+
+
 def verdict(a_scores, b_scores, a_ev=(), b_ev=()):
     rounds = {}
     for i, (key, _, _) in enumerate(judge_mod.LLM_ROUNDS):
-        rounds[key] = {'red': side(a_scores[i], a_ev), 'blue': side(b_scores[i], b_ev), 'commentary': 'Red edges Blue.'}
+        make = academics_side if key == 'academics' else side
+        rounds[key] = {'red': make(a_scores[i], a_ev), 'blue': make(b_scores[i], b_ev), 'commentary': 'Red edges Blue.'}
     return {**rounds, 'announcer': 'In the Red corner versus the Blue corner!', 'red_learn_from_blue': 'Red learns', 'blue_learn_from_red': 'Blue learns'}
 
 
@@ -88,6 +97,7 @@ def gh_repo(name, stars=0, fork=False, lang='Python', pushed='2026-10-01T00:00:0
 
 
 def fighter(name='Aarav Mehta', **kw):
+    kw.setdefault('achievements', ['Shortlisted, a hackathon'])
     return Fighter(name=name, headline='Engineer', **kw)
 
 
@@ -363,12 +373,19 @@ class FakeHistory:
 
     def __init__(self, fail=False):
         self.rows, self.fail = [], fail
+        self.keys = {}  # identity_hash -> index into rows, like the partial unique index
 
-    def record(self, row):
+    def record(self, row, identity_hash=None):
         if self.fail:
             raise RuntimeError('db down')
-        self.rows.append(row)
-        return f'id-{len(self.rows)}'
+        if identity_hash is not None and identity_hash in self.keys:
+            i = self.keys[identity_hash]
+            self.rows[i] = {**row, 'id': self.rows[i]['id'], 'duel_count': self.rows[i]['duel_count'] + 1}
+            return {'id': self.rows[i]['id'], 'rematch': True}
+        self.rows.append({**row, 'id': f'id-{len(self.rows) + 1}', 'duel_count': 1})
+        if identity_hash is not None:
+            self.keys[identity_hash] = len(self.rows) - 1
+        return {'id': self.rows[-1]['id'], 'rematch': False}
 
     def recent(self, limit=24):
         return {'enabled': True, 'duels': self.rows[:limit], 'record': {'wins': 0, 'losses': 0, 'draws': 0, 'total': len(self.rows)}}
@@ -403,7 +420,7 @@ def test_service_shares_only_when_asked():
     svc.history = history
     assert list(svc.run(build()))[-1]['result']['shared'] is None
     assert history.rows == []
-    assert list(svc.run(build(), share=True))[-1]['result']['shared'] == {'id': 'id-1'}
+    assert list(svc.run(build(), share=True))[-1]['result']['shared'] == {'id': 'id-1', 'rematch': False}
     assert len(history.rows) == 1
 
 
@@ -428,10 +445,166 @@ def test_api_always_shares_and_serves_the_public_wall(monkeypatch):
     client = TestClient(main.app)
 
     r = client.post('/api/duel', files={'file': ('cv.pdf', build(), 'application/pdf')})  # no opt-in field
-    assert json.loads(r.text.splitlines()[-1])['result']['shared'] == {'id': 'id-1'}
+    assert json.loads(r.text.splitlines()[-1])['result']['shared'] == {'id': 'id-1', 'rematch': False}
     wall = client.get('/api/duels?limit=5').json()
     assert wall['record']['total'] == 1 and wall['duels'][0]['challenger_name'] == 'Aarav M.'
     assert client.get('/api/duels?limit=500').status_code == 422
 
     monkeypatch.setattr(main, 'duel_history', SimpleNamespace(enabled=False))
     assert client.get('/api/duels').json() == {'enabled': False, 'duels': [], 'record': None}
+
+
+def test_rematch_with_same_email_updates_the_one_wall_entry():
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    first = list(svc.run(build(), share=True))[-1]['result']['shared']
+    second = list(svc.run(build(), share=True))[-1]['result']['shared']
+    assert first == {'id': 'id-1', 'rematch': False}
+    assert second == {'id': 'id-1', 'rematch': True}
+    assert len(history.rows) == 1 and history.rows[0]['duel_count'] == 2
+    assert 'aarav.mehta@example.com' not in json.dumps(history.rows) + json.dumps(list(history.keys))
+
+
+def test_different_email_gets_its_own_wall_entry(monkeypatch):
+    import synthetic_resume
+
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    list(svc.run(build(), share=True))
+    other = [(line.replace('aarav.mehta@example.com', 'someone.else@example.org'), size)
+             for line, size in synthetic_resume.LINES]
+    monkeypatch.setattr(synthetic_resume, 'LINES', other)
+    shared = list(svc.run(build(), share=True))[-1]['result']['shared']
+    assert shared == {'id': 'id-2', 'rematch': False}
+    assert len(history.rows) == 2 and [r['duel_count'] for r in history.rows] == [1, 1]
+
+
+class FakeConn:
+    """Stands in for a psycopg connection so the real DuelHistory SQL can be checked offline."""
+
+    def __init__(self, log, reply):
+        self.log, self.reply = log, reply
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=()):
+        self.log.append((sql, params))
+        reply = self.reply
+
+        class Cursor:
+            def fetchone(self):
+                return reply
+
+            def fetchall(self):
+                return []
+        return Cursor()
+
+
+@pytest.mark.parametrize('inserted, rematch', [(True, False), (False, True)])
+def test_history_upserts_on_identity_and_never_selects_it_for_the_wall(monkeypatch, inserted, rematch):
+    from duel.history import DuelHistory
+
+    calls = []
+    h = DuelHistory('postgresql://fake')
+    monkeypatch.setattr(h, '_connect', lambda: FakeConn(calls, {'id': 'abc', 'inserted': inserted}))
+    row = summarize(list(make_service().run(build()))[-1]['result'])
+    assert h.record(row, 'k' * 64) == {'id': 'abc', 'rematch': rematch}
+    sql, params = calls[0]
+    assert 'on conflict (identity_hash) where identity_hash is not null do update' in sql
+    assert 'duel_count = public.duels.duel_count + 1' in sql and 'created_at' not in sql
+    assert params[-1] == 'k' * 64
+
+    h.recent(5)
+    wall_sql = calls[1][0]
+    assert 'identity_hash' not in wall_sql and 'order by updated_at desc' in wall_sql
+    assert 'duel_count' in wall_sql and 'updated_at' in wall_sql
+
+
+# ---------- academics: grades and achievements ----------
+
+@pytest.mark.parametrize('text, points', [
+    ('8.86/10.0', 78), ('8.86 / 10.0', 78), ('9.1/10', 83), ('CGPA 7.5/10', 50), ('3.7/4', 86),
+    ('85%', 70), ('9.7', 95), ('10/10', 100), ('4.9/10', 0), ('', None), ('Distinction', None), ('11/10', None),
+])
+def test_gpa_points_are_deterministic(text, points):
+    assert judge_mod.gpa_points(text) == points
+
+
+@pytest.mark.parametrize('points, expected', [
+    ([], 0), ([65], 65), ([65, 40, 25, 25], 73),   # 65 + (0.35*40 + 0.2*25 + 0.1*25) * 0.35 = 72.5
+    ([85, 55], 88), ([0, -5], 0), ([100, 100], 100),
+])
+def test_achievements_best_counts_fully_rest_diminish(points, expected):
+    assert judge_mod.combine_achievements(points) == expected
+
+
+def _academic_fighter(score='', achievements=()):
+    from duel.profiles import Education
+    edu = [Education(institution='X', degree='B.E.', score=score)] if score else []
+    return fighter(education=edu, achievements=list(achievements))
+
+
+def test_academics_uses_stated_cgpa_over_the_judges_guess():
+    f = _academic_fighter('9.1/10', ['Winner, Smart India Hackathon 2024'])
+    score, parts = judge_mod.academics_score({'grades': 40, 'achievement_points': [{'index': 0, 'points': 85}]}, f)
+    assert parts == {'grades': 83, 'achievements': 85} and score == round(0.4 * 83 + 0.6 * 85)
+
+
+def test_academics_without_grades_uses_achievements_only_and_ignores_bad_indexes():
+    f = _academic_fighter('', ['Runner-up, BotCraft', 'CodeChef rating 1210'])
+    side_in = {'grades': -1, 'achievement_points': [{'index': 0, 'points': 65}, {'index': 1, 'points': 40},
+                                                     {'index': 7, 'points': 99}, {'index': 0, 'points': 10}]}
+    score, parts = judge_mod.academics_score(side_in, f)
+    assert parts == {'grades': None, 'achievements': 70} and score == 70  # 65 + 0.35*40*0.35; index 7 ignored
+
+
+def test_no_achievements_listed_means_zero_achievement_points():
+    score, parts = judge_mod.academics_score({'grades': -1, 'achievement_points': [{'index': 0, 'points': 90}]}, _academic_fighter('9.5/10'))
+    assert parts == {'grades': 91, 'achievements': 0} and score == round(0.4 * 91)  # 9.5 sits 3/5 of the way from 85 to 95
+
+
+def test_achievements_can_beat_a_higher_gpa_and_breakdown_is_returned():
+    reply = verdict([60] * 4, [60] * 4)
+    # Red (challenger): CGPA 9.5, a participation certificate. Blue (Sachin, CGPA 8.86): BotCraft runner-up and more
+    reply['academics'] = {
+        'red': academics_side(0, grades=0, points=[{'index': 0, 'points': 10}]),
+        'blue': academics_side(0, grades=0, points=[{'index': i, 'points': p} for i, p in enumerate([65, 40, 25, 25])]),
+        'commentary': 'Blue wins on achievements.',
+    }
+    challenger = _academic_fighter('9.5/10', ['Participation certificate, college quiz'])
+    rng = SimpleNamespace(random=lambda: 0.1)  # challenger is Red
+    r = judge_mod.judge(FakeLLM(judge_reply=reply), challenger, sachin_fighter(DATA), model='m', fallback_model=None, rng=rng)
+    acad = next(x for x in r['rounds'] if x['key'] == 'academics')
+    assert acad['challenger']['breakdown'] == {'grades': 91, 'achievements': 10}
+    assert acad['sachin']['breakdown']['grades'] == 78  # from "8.86 / 10.0" in the portfolio data, not the judge's 0
+    assert acad['sachin']['score'] > acad['challenger']['score'] and acad['winner'] == 'sachin'
+    assert all('breakdown' not in x['challenger'] for x in r['rounds'] if x['key'] != 'academics')
+
+
+def test_judge_schema_and_prompt_ask_for_per_achievement_points():
+    side_schema = judge_mod.JUDGE_SCHEMA['properties']['academics']['properties']['red']
+    assert set(side_schema['required']) == {'grades', 'achievement_points', 'evidence'}
+    assert 'score' in judge_mod.JUDGE_SCHEMA['properties']['experience']['properties']['red']['required']
+    for phrase in ('competitive-programming', 'hackathons', 'win > runner-up', 'Never let grades leak', 'EVERY entry'):
+        assert phrase in judge_mod.JUDGE_PROMPT
+
+
+@pytest.mark.parametrize('raw, clean', [
+    ('score": "8.86/10.0"', '8.86/10.0'),
+    ('"degree": "B.Tech in Computer Science"', 'B.Tech in Computer Science'),
+    ('Winner, Smart India Hackathon 2024 (software edition).', 'Winner, Smart India Hackathon 2024 (software edition).'),
+    ('Ratio 3:1 load balancing', 'Ratio 3:1 load balancing'),
+])
+def test_evidence_quotes_lose_json_field_names(raw, clean):
+    assert judge_mod.clean_quote(raw) == clean
+
+
+def test_cleaned_quote_still_has_to_exist_in_the_profile():
+    profile = {'education': [{'score': '8.86/10.0'}]}
+    assert judge_mod.verified_evidence(['score": "8.86/10.0"', 'score": "9.9/10"'], profile) == ['8.86/10.0']

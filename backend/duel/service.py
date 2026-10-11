@@ -5,12 +5,15 @@ import random
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Deque, Dict, Iterator, Optional
+from typing import Deque, Dict, Iterator, List, Optional
+
+from guard import PromptGuard
 
 from .github import GithubClient, find_github_username, valid_username
 from .history import DuelHistory, summarize
+from .identity import challenger_identity
 from .judge import judge
-from .pdf import ResumeError, extract_resume
+from .pdf import MIN_TEXT_CHARS, ResumeError, extract_resume
 from .profiles import Fighter, extract_fighter, sachin_fighter
 
 log = logging.getLogger(__name__)
@@ -82,12 +85,14 @@ class DuelService:
         f.github = self.github.stats(SACHIN_GITHUB)
         return f
 
-    def _share(self, result: Dict) -> Optional[Dict]:
-        """Puts a duel on the public wall. A database hiccup never costs the visitor their result."""
+    def _share(self, result: Dict, text: str, links: List[str], github_username: Optional[str]) -> Optional[Dict]:
+        """Puts a duel on the public wall, updating the person's entry on a rematch ({'id', 'rematch'}).
+        A database hiccup never costs the visitor their result."""
         if not (self.history and self.history.enabled):
             return None
         try:
-            return {'id': self.history.record(summarize(result))}
+            identity = challenger_identity(text, links, github_username)
+            return self.history.record(summarize(result), identity.key if identity else None)
         except Exception as e:
             log.warning('Could not save duel to history: %s', type(e).__name__)
             return None
@@ -99,12 +104,22 @@ class DuelService:
         try:
             yield {'stage': 'reading'}
             text, links = extract_resume(pdf_bytes)
+            if getattr(self, 'guard', None) is None:
+                self.guard = PromptGuard.for_client(self.llm)
+            # Only the screened text and links reach an LLM; lines that talk to the judges are dropped, unpenalised
+            screen = self.guard.screen_resume(text, links)
+            if screen.gutted or len(screen.text) < MIN_TEXT_CHARS:
+                yield {'stage': 'error', 'message': (
+                    'Most of that résumé was talking to the judges instead of about you, so they put down their '
+                    'scorecards. Upload a regular résumé and they will happily score it.'
+                )}
+                return
             challenger = extract_fighter(
-                self.llm, text, links, model=self.extract_model, fallback_model=self.fallback_model
+                self.llm, screen.text, screen.links, model=self.extract_model, fallback_model=self.fallback_model
             )
 
             override = github_override.strip().lstrip('@')
-            username = override if valid_username(override) else find_github_username(links, text)
+            username = override if valid_username(override) else find_github_username(screen.links, screen.text)
             yield {'stage': 'github', 'username': username}
             challenger.github = self.github.stats(username) if username else None
             sachin = self.sachin()
@@ -114,7 +129,8 @@ class DuelService:
                 self.llm, challenger, sachin, model=self.judge_model, fallback_model=self.fallback_model, rng=self.rng
             )
             result['github_lookup'] = {'username': username, 'found': challenger.github is not None}
-            result['shared'] = self._share(result) if share else None
+            result['security'] = screen.security()
+            result['shared'] = self._share(result, text, links, username) if share else None
             yield {'stage': 'done', 'result': result}
         except ResumeError as e:
             yield {'stage': 'error', 'message': str(e)}

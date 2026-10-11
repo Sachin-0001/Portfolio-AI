@@ -5,14 +5,14 @@ const MAX_SHOWN = 18;
 
 function Column({ title, items, color }: { title: string; items: string[]; color?: string }) {
   return (
-    <div className="card p-5">
+    <div className="card min-w-0 p-5">
       <h4 className="flex items-baseline justify-between gap-3 font-mono text-xs uppercase tracking-[0.18em]" style={{ color }}>
-        {title}
-        <span className="text-faint">{items.length}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]">{title}</span>
+        <span className="shrink-0 text-faint">{items.length}</span>
       </h4>
       <div className="mt-4 flex flex-wrap gap-1.5">
         {items.slice(0, MAX_SHOWN).map(s => (
-          <span key={s} className="chip text-fg/80" style={color ? { borderColor: `color-mix(in srgb, ${color} 35%, transparent)` } : undefined}>
+          <span key={s} className="chip max-w-full whitespace-normal text-fg/80 [overflow-wrap:anywhere]" style={color ? { borderColor: `color-mix(in srgb, ${color} 35%, transparent)` } : undefined}>
             {s}
           </span>
         ))}
