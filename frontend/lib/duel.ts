@@ -57,13 +57,20 @@ export interface DuelResult {
   learn: { challenger_from_sachin: string; sachin_from_challenger: string };
   skills: { shared: string[]; only_challenger: string[]; only_sachin: string[] };
   github_lookup: { username: string | null; found: boolean };
-  shared: { id: string } | null;
+  /** rematch: this challenger was already on the wall, so their entry was updated in place */
+  shared: { id: string; rematch: boolean } | null;
+  /** Lines stripped from the résumé for trying to instruct the judges. Absent on older responses. */
+  security?: { flagged: boolean; removed_lines: number; notes: string[] } | null;
 }
 
 /** A duel as shown on the public wall: headline facts only (see backend/duel/history.py). */
 export interface PublicDuel {
   id: string;
   created_at: string;
+  /** Last rematch (equals created_at for a single duel) */
+  updated_at: string;
+  /** How many times this challenger has duelled; > 1 means rematches */
+  duel_count: number;
   challenger_name: string;
   challenger_headline: string;
   challenger_github: string | null;

@@ -31,44 +31,59 @@ function verdict(d: PublicDuel) {
 
 function DuelRow({ d, highlight }: { d: PublicDuel; highlight: boolean }) {
   const v = verdict(d);
+  const when = d.updated_at || d.created_at;
+  // Phones: identity on top, then verdict + time (left) against scores + pips (right).
+  // sm+: the two inner wrappers become display:contents so all four parts sit in one row.
   return (
     <li
-      className={`card card-hover flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-5 ${highlight ? 'animate-fade-up border-signal/60' : ''}`}
+      className={`card card-hover flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5 ${highlight ? 'animate-fade-up border-signal/60' : ''}`}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:order-1">
         <Avatar name={d.challenger_name} url={d.challenger_avatar} side="challenger" size={44} />
-        <div className="min-w-0">
-          <p className="truncate font-medium text-fg">
-            {d.challenger_name}
-            {highlight && <span className="ml-2 font-mono text-[11px] text-signal">you</span>}
+        <div className="min-w-0 flex-1">
+          <p className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate font-medium text-fg">{d.challenger_name}</span>
+            {highlight && <span className="shrink-0 font-mono text-[11px] text-signal">you</span>}
+            {d.duel_count > 1 && (
+              <span
+                title={`${d.duel_count} duels; the wall shows the latest`}
+                className="shrink-0 whitespace-nowrap font-mono text-[11px] text-faint"
+              >
+                rematch ×{d.duel_count}
+              </span>
+            )}
           </p>
           <p className="truncate text-[13px] text-faint">{d.challenger_headline || 'Challenger'}</p>
         </div>
       </div>
 
-      {/* One pip per round, coloured by who took it */}
-      <div className="flex items-center gap-1.5" aria-label="Round winners">
-        {d.rounds.map(r => (
-          <span
-            key={r.key}
-            title={`${r.title}: ${r.challenger} vs ${r.sachin}`}
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ background: r.winner === 'tie' ? 'var(--faint)' : SIDE_COLOR[r.winner] }}
-          />
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between gap-5 sm:justify-end">
-        <p className="font-mono text-sm tabular-nums">
-          <span style={{ color: SIDE_COLOR.challenger }}>{d.challenger_total.toFixed(1)}</span>
-          <span className="text-faint"> vs </span>
-          <span style={{ color: SIDE_COLOR.sachin }}>{d.sachin_total.toFixed(1)}</span>
-        </p>
-        <div className="w-32 text-right">
+      <div className="flex items-end justify-between gap-4 border-t border-line pt-3 sm:contents">
+        <div className="min-w-0 sm:order-4 sm:w-36 sm:shrink-0 sm:text-right">
           <p className="truncate text-sm font-medium" style={{ color: v.color }}>
             {v.text}
           </p>
-          <p className="font-mono text-[11px] text-faint">{ago(d.created_at)}</p>
+          <time dateTime={when} className="font-mono text-[11px] text-faint">
+            {ago(when)}
+          </time>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5 sm:contents">
+          <p className="font-mono text-sm tabular-nums sm:order-3">
+            <span style={{ color: SIDE_COLOR.challenger }}>{d.challenger_total.toFixed(1)}</span>
+            <span className="text-faint"> vs </span>
+            <span style={{ color: SIDE_COLOR.sachin }}>{d.sachin_total.toFixed(1)}</span>
+          </p>
+          {/* One pip per round, coloured by who took it */}
+          <div className="flex items-center gap-1.5 sm:order-2" aria-label="Round winners">
+            {d.rounds.map(r => (
+              <span
+                key={r.key}
+                title={`${r.title}: ${r.challenger} vs ${r.sachin}`}
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: r.winner === 'tie' ? 'var(--faint)' : SIDE_COLOR[r.winner] }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </li>
@@ -95,7 +110,7 @@ export default function DuelWall({ refreshKey = 0, highlightId }: { refreshKey?:
 
   const record = data?.record;
   return (
-    <section className="mt-20">
+    <section className="mt-16 sm:mt-20">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-faint">
@@ -106,7 +121,7 @@ export default function DuelWall({ refreshKey = 0, highlightId }: { refreshKey?:
           </h2>
         </div>
         {record && record.total > 0 && (
-          <div className="flex gap-2 font-mono text-xs">
+          <div className="flex flex-wrap gap-2 font-mono text-xs">
             <span className="chip" style={{ color: SIDE_COLOR.sachin }}>Sachin {record.wins} W</span>
             <span className="chip" style={{ color: SIDE_COLOR.challenger }}>Challengers {record.losses} W</span>
             <span className="chip">{record.draws} draws</span>
@@ -117,11 +132,11 @@ export default function DuelWall({ refreshKey = 0, highlightId }: { refreshKey?:
       {!data ? (
         <ul className="mt-6 space-y-3" aria-busy>
           {[0, 1, 2].map(i => (
-            <li key={i} className="card h-[76px] animate-pulse" />
+            <li key={i} className="card h-[124px] animate-pulse sm:h-[76px]" />
           ))}
         </ul>
       ) : data.duels.length === 0 ? (
-        <div className="card mt-6 p-8 text-center text-muted">No duels on the wall yet. Be the first.</div>
+        <div className="card mt-6 p-6 text-center text-muted sm:p-8">No duels on the wall yet. Be the first.</div>
       ) : (
         <ul className="mt-6 space-y-3">
           {data.duels.map(d => (

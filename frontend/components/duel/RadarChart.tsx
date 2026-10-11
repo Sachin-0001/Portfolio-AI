@@ -75,10 +75,10 @@ export default function RadarChart({ rounds, names }: { rounds: Round[]; names: 
           </g>
         ))}
       </svg>
-      <figcaption className="mt-3 flex justify-center gap-5 font-mono text-xs text-muted">
+      <figcaption className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1 font-mono text-xs text-muted">
         {(['challenger', 'sachin'] as Side[]).map(side => (
-          <span key={side} className="inline-flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: SIDE_COLOR[side] }} />
+          <span key={side} className="inline-flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: SIDE_COLOR[side] }} />
             {names[side]}
           </span>
         ))}

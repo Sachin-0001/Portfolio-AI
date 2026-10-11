@@ -27,21 +27,33 @@ function Scoreboard({ result, revealed, names }: { result: DuelResult; revealed:
   const wins = (side: Side) => shown.filter(r => r.winner === side).length;
 
   return (
-    <div className="card p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-3 font-mono text-xs">
-        <span className="min-w-0 truncate" style={{ color: SIDE_COLOR.challenger }}>
-          {names.challenger} · {wins('challenger')} {wins('challenger') === 1 ? 'round' : 'rounds'}
+    <div className="card min-w-0 flex-1 px-3 py-2.5 sm:p-5">
+      {/* Phones drop the word "rounds" so both names survive; the n/5 counter in the middle keeps it readable */}
+      <div className="flex items-center justify-between gap-2 font-mono text-xs sm:gap-3">
+        {/* Only the names truncate; the win counts must always stay visible */}
+        <span className="flex min-w-0 whitespace-pre" style={{ color: SIDE_COLOR.challenger }}>
+          <span className="truncate">{names.challenger}</span>
+          <span className="shrink-0">
+            {' · '}
+            {wins('challenger')}
+            <span className="max-sm:sr-only"> {wins('challenger') === 1 ? 'round' : 'rounds'}</span>
+          </span>
         </span>
         <span className="shrink-0 text-faint">
           {revealed}/{result.rounds.length}
         </span>
-        <span className="min-w-0 truncate text-right" style={{ color: SIDE_COLOR.sachin }}>
-          {wins('sachin')} {wins('sachin') === 1 ? 'round' : 'rounds'} · {names.sachin}
+        <span className="flex min-w-0 justify-end whitespace-pre" style={{ color: SIDE_COLOR.sachin }}>
+          <span className="shrink-0">
+            {wins('sachin')}
+            <span className="max-sm:sr-only"> {wins('sachin') === 1 ? 'round' : 'rounds'}</span>
+            {' · '}
+          </span>
+          <span className="truncate">{names.sachin}</span>
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
+      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-3">
         {(['challenger', 'sachin'] as Side[]).map(side => (
-          <div key={side} className="h-3 overflow-hidden rounded-full bg-white/[0.06]">
+          <div key={side} className="h-2 overflow-hidden rounded-full bg-white/[0.06] sm:h-3">
             <div
               className={`score-fill h-full rounded-full ${side === 'challenger' ? 'ml-auto' : ''}`}
               style={{ width: `${avg(side)}%`, background: SIDE_COLOR[side] }}
@@ -118,37 +130,60 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
   };
 
   const challengerWon = result.winner === 'challenger';
+  const caught = result.security?.flagged ? result.security.removed_lines : null;
 
   return (
     <div>
       {/* Face-off */}
       <section className="relative">
-        <div className="grid items-center gap-4 lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
+        <div className="grid items-center gap-3 sm:gap-4 lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
           <FighterCard fighter={result.fighters.challenger} side="challenger" corner="Challenger" className="animate-slide-in-left" />
           <div className="flex justify-center">
             <span className="animate-slam inline-block" style={{ animationDelay: '450ms' }}>
-              <span className="animate-pulse-ring flex h-20 w-20 items-center justify-center rounded-full border border-line-strong bg-surface font-serif text-4xl italic text-fg">
+              <span className="animate-pulse-ring flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface font-serif text-2xl italic text-fg sm:h-16 sm:w-16 sm:text-3xl lg:h-20 lg:w-20 lg:text-4xl">
                 vs
               </span>
             </span>
           </div>
           <FighterCard fighter={result.fighters.sachin} side="sachin" corner="Reigning champion" className="animate-slide-in-right" />
         </div>
-        <p className="animate-fade-up mx-auto mt-8 max-w-3xl text-center font-serif text-xl italic leading-snug text-fg/90 sm:text-2xl" style={{ animationDelay: '900ms' }}>
+        <p
+          className="animate-fade-up mx-auto mt-6 max-w-3xl text-pretty text-center font-serif text-lg italic leading-snug text-fg/90 [overflow-wrap:anywhere] sm:mt-8 sm:text-2xl"
+          style={{ animationDelay: '900ms' }}
+        >
           {result.announcer}
         </p>
+        {caught !== null && (
+          <p
+            role="note"
+            className="animate-fade-up mx-auto mt-4 w-fit max-w-full rounded-2xl border border-signal/30 bg-signal/5 px-4 py-2 text-center text-[13px] leading-snug text-muted"
+            style={{ animationDelay: '1100ms' }}
+          >
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-signal">Ref’s note</span>{' '}
+            {caught > 0
+              ? `The judges caught ${caught} ${caught === 1 ? 'line' : 'lines'} trying to talk to them directly; ${caught === 1 ? 'it was' : 'those were'} ignored.`
+              : 'The judges caught your résumé trying to talk to them directly; that part was ignored.'}
+          </p>
+        )}
       </section>
 
       {/* Controls + scoreboard */}
-      <div className="sticky top-16 z-30 mt-10 bg-bg/80 py-3 backdrop-blur-xl">
+      {/* On phones the control sits beside the scoreboard in one ~70px strip instead of stacking under it */}
+      <div className="sticky top-16 z-30 mt-8 flex items-center gap-2 bg-bg/80 py-2 backdrop-blur-xl sm:mt-10 sm:block sm:py-3">
         <Scoreboard result={result} revealed={revealed} names={names} />
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="flex shrink-0 justify-end gap-2 sm:mt-2">
           {!finished ? (
-            <button onClick={skip} className="rounded-full border border-line-strong px-4 py-1.5 text-sm text-fg hover:bg-white/5">
-              Skip to result
+            <button
+              onClick={skip}
+              className="inline-flex min-h-11 items-center rounded-full border border-line-strong px-4 text-sm text-fg hover:bg-white/5 sm:min-h-0 sm:py-1.5"
+            >
+              Skip<span className="max-sm:hidden">&nbsp;to result</span>
             </button>
           ) : (
-            <button onClick={replay} className="rounded-full border border-line px-4 py-1.5 text-sm text-muted hover:text-fg">
+            <button
+              onClick={replay}
+              className="inline-flex min-h-11 items-center rounded-full border border-line px-4 text-sm text-muted hover:text-fg sm:min-h-0 sm:py-1.5"
+            >
               Replay
             </button>
           )}
@@ -156,7 +191,7 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
       </div>
 
       {/* Rounds */}
-      <section className="mt-4 space-y-5">
+      <section className="mt-3 space-y-4 sm:mt-4 sm:space-y-5">
         {!introDone && (
           <p className="py-10 text-center font-mono text-sm uppercase tracking-[0.3em] text-faint">
             <span className="caret">Get ready…</span>
@@ -169,15 +204,15 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
 
       {/* Final verdict */}
       {finished && (
-        <section ref={finalRef} className="mt-14">
-          <div className="card animate-fade-up relative overflow-hidden p-8 text-center sm:p-12">
+        <section ref={finalRef} className="mt-10 sm:mt-14">
+          <div className="card animate-fade-up relative overflow-hidden px-5 py-8 text-center sm:p-12">
             <div aria-hidden className="bg-grid pointer-events-none absolute inset-0" />
             <div aria-hidden className="glow pointer-events-none absolute -top-48 left-1/2 h-[30rem] w-[50rem] -translate-x-1/2" />
             <div className="relative">
               <p className="font-mono text-xs uppercase tracking-[0.3em] text-faint">Final verdict</p>
               <div className={result.decision === 'ko' ? 'animate-shake' : ''} style={{ animationDelay: '600ms' }}>
                 <h2
-                  className="animate-slam mt-4 font-serif text-5xl italic [overflow-wrap:anywhere] sm:text-8xl"
+                  className="animate-slam mt-4 text-balance font-serif text-5xl italic leading-[1.05] [overflow-wrap:anywhere] sm:text-7xl md:text-8xl"
                   style={{ color: result.winner === 'draw' ? 'var(--fg)' : SIDE_COLOR[result.winner as Side] }}
                 >
                   {verdict.big}
@@ -186,22 +221,22 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
               <p className="mt-3 text-muted">{verdict.small}</p>
               {result.shared && (
                 <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-signal/40 px-3 py-1 font-mono text-xs text-signal">
-                  ✓ added to the wall below
+                  {result.shared.rematch ? '✓ your wall entry was updated' : '✓ added to the wall below'}
                 </p>
               )}
 
-              <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-8 font-mono">
+              <div className="mx-auto mt-6 flex max-w-sm items-center justify-center gap-6 font-mono sm:mt-8 sm:gap-8">
                 {(['challenger', 'sachin'] as Side[]).map(side => (
                   <div key={side}>
                     <p className="text-4xl font-medium tabular-nums" style={{ color: SIDE_COLOR[side] }}>
                       {result.totals[side]}
                     </p>
-                    <p className="mt-1 text-xs text-faint">{names[side]}</p>
+                    <p className="mt-1 max-w-[8rem] truncate text-xs text-faint">{names[side]}</p>
                   </div>
                 ))}
               </div>
 
-              <p className="mx-auto mt-8 max-w-xl text-fg">
+              <p className="mx-auto mt-6 max-w-xl text-pretty text-fg sm:mt-8">
                 {challengerWon
                   ? 'Respect. You beat me fair and square. Sounds like we should be building something together.'
                   : result.winner === 'draw'
@@ -209,23 +244,24 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
                     : 'Good fight. Every round is a list of things worth learning next, for both of us.'}
               </p>
 
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {/* Full-width stacked buttons on phones, a centred row from sm up */}
+              <div className="mx-auto mt-8 flex max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-center">
                 <a
                   href="mailto:sachin.samprit@gmail.com?subject=We%20duelled%20on%20your%20portfolio"
-                  className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink transition-transform hover:scale-[1.03]"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink transition-transform hover:scale-[1.03]"
                 >
                   <Mail className="h-4 w-4" /> Let’s talk
                 </a>
                 <button
                   onClick={download}
                   disabled={exporting}
-                  className="inline-flex items-center gap-2 rounded-full border border-line-strong px-5 py-2.5 text-sm text-fg hover:bg-white/5 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line-strong px-5 py-2.5 text-sm text-fg hover:bg-white/5 disabled:opacity-50"
                 >
                   <Download className="h-4 w-4" /> {exporting ? 'Rendering…' : 'Download fight card'}
                 </button>
                 <button
                   onClick={onRematch}
-                  className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm text-muted hover:text-fg"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm text-muted hover:text-fg"
                 >
                   Rematch
                 </button>
@@ -234,45 +270,45 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
           </div>
 
           {/* What each could learn */}
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 sm:mt-6 md:grid-cols-2">
             {(
               [
                 ['challenger', `What ${names.challenger} could pick up from Sachin`, result.learn.challenger_from_sachin],
                 ['sachin', `What Sachin could pick up from ${names.challenger}`, result.learn.sachin_from_challenger],
               ] as [Side, string, string][]
             ).map(([side, title, body]) => (
-              <Reveal key={side} className="card p-6">
-                <h3 className="font-mono text-xs uppercase tracking-[0.18em]" style={{ color: SIDE_COLOR[side] }}>
+              <Reveal key={side} className="card p-5 sm:p-6">
+                <h3 className="font-mono text-xs uppercase leading-relaxed tracking-[0.18em] [overflow-wrap:anywhere]" style={{ color: SIDE_COLOR[side] }}>
                   {title}
                 </h3>
-                <p className="mt-3 leading-relaxed text-muted">{body}</p>
+                <p className="mt-3 leading-relaxed text-muted [overflow-wrap:anywhere]">{body}</p>
               </Reveal>
             ))}
           </div>
 
           {/* Breakdown */}
-          <div className="mt-20 space-y-16">
+          <div className="mt-14 space-y-12 sm:mt-20 sm:space-y-16">
             <Reveal>
-              <h3 className="mb-6 font-mono text-xs uppercase tracking-[0.2em] text-faint">
+              <h3 className="mb-4 font-mono text-xs uppercase tracking-[0.2em] text-faint sm:mb-6">
                 <span className="text-accent">01</span> · Shape of the fight
               </h3>
-              <div className="card p-6">
+              <div className="card p-3 sm:p-6">
                 <RadarChart rounds={result.rounds} names={names} />
               </div>
             </Reveal>
             <Reveal>
-              <h3 className="mb-6 font-mono text-xs uppercase tracking-[0.2em] text-faint">
+              <h3 className="mb-4 font-mono text-xs uppercase tracking-[0.2em] text-faint sm:mb-6">
                 <span className="text-accent">02</span> · Skills overlap
               </h3>
               <SkillsOverlap skills={result.skills} names={names} />
             </Reveal>
             <Reveal>
-              <h3 className="mb-6 font-mono text-xs uppercase tracking-[0.2em] text-faint">
+              <h3 className="mb-4 font-mono text-xs uppercase tracking-[0.2em] text-faint sm:mb-6">
                 <span className="text-accent">03</span> · Tale of the tape
               </h3>
               <TaleOfTheTape result={result} names={names} />
               {!result.github_lookup.found && (
-                <p className="mt-3 text-sm text-faint">
+                <p className="mt-3 text-sm text-faint [overflow-wrap:anywhere]">
                   {result.github_lookup.username
                     ? `Couldn't load github.com/${result.github_lookup.username}, so the open-source round scored zero for ${names.challenger}.`
                     : `No GitHub link found on the résumé, so the open-source round scored zero for ${names.challenger}. Add your username and rematch.`}
@@ -280,8 +316,12 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
               )}
             </Reveal>
             <Reveal className="text-center">
-              <Link href="/chatbot" className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-fg">
-                <Sparkle className="h-4 w-4 text-accent" /> Ask my AI how I’d approach your stack <ArrowRight className="h-4 w-4" />
+              <Link
+                href="/chatbot"
+                className="inline-flex min-h-11 items-center gap-2 text-balance text-sm text-muted transition-colors hover:text-fg"
+              >
+                <Sparkle className="h-4 w-4 shrink-0 text-accent" /> Ask my AI how I’d approach your stack{' '}
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </Reveal>
           </div>

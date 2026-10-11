@@ -74,19 +74,19 @@ function Loading({ state, fileName }: { state: State; fileName: string }) {
   const current = state.kind === 'running' ? STEPS.findIndex(s => s.stage === state.stage) : 0;
 
   return (
-    <div className="card mx-auto max-w-xl p-8 text-center sm:p-10">
-      <div className="flex items-center justify-center gap-6">
+    <div className="card mx-auto max-w-xl px-5 py-8 text-center sm:p-10">
+      <div className="flex items-center justify-center gap-4 sm:gap-6">
         <div className="animate-slide-in-left">
           <Avatar name={fileName.replace(/\.pdf$/i, '') || 'You'} side="challenger" size={64} />
         </div>
-        <span className="animate-slam font-serif text-3xl italic text-fg" style={{ animationDelay: '300ms' }}>
+        <span className="animate-slam font-serif text-2xl italic text-fg sm:text-3xl" style={{ animationDelay: '300ms' }}>
           vs
         </span>
         <div className="animate-slide-in-right">
           <Avatar name="Sachin Suresh" url={SACHIN_AVATAR} side="sachin" size={64} />
         </div>
       </div>
-      <ol className="mx-auto mt-9 max-w-xs space-y-3 text-left">
+      <ol className="mx-auto mt-8 max-w-xs space-y-3 text-left sm:mt-9">
         {STEPS.map((step, i) => {
           const done = i < current;
           const active = i === current;
@@ -101,13 +101,18 @@ function Loading({ state, fileName }: { state: State; fileName: string }) {
                   <span className="h-1.5 w-1.5 rounded-full bg-faint" />
                 )}
               </span>
-              {step.label(state)}
-              {active && '…'}
+              {/* min-w-0 + anywhere: a 39-char GitHub username must wrap, not push the card wider */}
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                {step.label(state)}
+                {active && '…'}
+              </span>
             </li>
           );
         })}
       </ol>
-      <p className="mt-8 font-mono text-xs text-faint">{seconds}s · usually 10 to 30s · your résumé is never stored</p>
+      <p className="mt-8 text-balance font-mono text-xs leading-relaxed text-faint">
+        {seconds}s · usually 10 to 30s · <span className="whitespace-nowrap">your résumé is never stored</span>
+      </p>
     </div>
   );
 }
@@ -160,42 +165,42 @@ export default function DuelPage() {
       <div aria-hidden className="bg-grid pointer-events-none absolute inset-0 h-[44rem]" />
       <div aria-hidden className="glow pointer-events-none absolute -top-40 left-1/2 h-[40rem] w-[60rem] -translate-x-1/2" />
 
-      <main className="relative mx-auto max-w-6xl px-5 pb-28 pt-28 sm:px-8 md:pt-32">
+      <main className="relative mx-auto max-w-6xl px-5 pb-20 pt-24 sm:px-8 sm:pb-28 sm:pt-28 md:pt-32">
         {state.kind === 'result' ? (
           <>
             <DuelArena result={state.result} onRematch={reset} />
             <DuelWall refreshKey={1} highlightId={state.result.shared?.id} />
           </>
         ) : state.kind === 'running' ? (
-          <div className="pt-10">
+          <div className="pt-4 sm:pt-10">
             <Loading state={state} fileName={file?.name ?? ''} />
           </div>
         ) : (
           <>
             <section className="text-center">
-              <p className="animate-fade-up font-mono text-xs uppercase tracking-[0.2em] text-faint">
+              <p className="animate-fade-up font-mono text-[11px] uppercase tracking-[0.14em] text-faint sm:text-xs sm:tracking-[0.2em]">
                 <span className="text-accent">Portfolio duel</span> · résumé vs résumé
               </p>
               <h1
-                className="animate-fade-up mx-auto mt-5 max-w-3xl text-4xl font-medium leading-[1.05] tracking-[-0.03em] text-fg sm:text-6xl"
+                className="animate-fade-up mx-auto mt-4 max-w-3xl text-balance text-4xl font-medium leading-[1.05] tracking-[-0.03em] text-fg sm:mt-5 sm:text-5xl md:text-6xl"
                 style={{ animationDelay: '80ms' }}
               >
                 Think you can <span className="font-serif font-normal italic text-accent">out-build</span> me?
               </h1>
-              <p className="animate-fade-up mx-auto mt-5 max-w-xl text-lg text-muted" style={{ animationDelay: '160ms' }}>
+              <p className="animate-fade-up mx-auto mt-4 max-w-xl text-pretty text-base text-muted sm:mt-5 sm:text-lg" style={{ animationDelay: '160ms' }}>
                 Drop your résumé. I’ll pull your GitHub, and an AI panel scores us head to head across five rounds.
               </p>
             </section>
 
             {state.kind === 'error' && (
-              <div className="card mx-auto mt-10 max-w-2xl border-red-400/30 p-5 text-center">
-                <p className="text-fg">{state.message}</p>
+              <div role="alert" className="card mx-auto mt-8 max-w-2xl border-red-400/30 p-4 text-center sm:mt-10 sm:p-5">
+                <p className="text-fg [overflow-wrap:anywhere]">{state.message}</p>
               </div>
             )}
 
-            <section className="mt-12 grid items-stretch gap-5 lg:grid-cols-[1.25fr_1fr]">
+            <section className="mt-8 grid items-stretch gap-4 sm:mt-12 sm:gap-5 lg:grid-cols-[1.25fr_1fr]">
               {/* Upload */}
-              <div className="card animate-slide-in-left flex flex-col p-6 sm:p-8">
+              <div className="card animate-slide-in-left flex min-w-0 flex-col p-5 sm:p-8">
                 <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-signal">Challenger</p>
                 <button
                   type="button"
@@ -210,7 +215,7 @@ export default function DuelPage() {
                     setDragging(false);
                     pick(e.dataTransfer.files[0]);
                   }}
-                  className={`mt-4 flex min-h-[13rem] flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                  className={`mt-4 flex min-h-[10rem] flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:min-h-[13rem] sm:px-6 sm:py-10 ${
                     dragging ? 'border-signal bg-signal/5' : file ? 'border-signal/50' : 'border-line-strong hover:border-signal/60'
                   }`}
                 >
@@ -219,7 +224,8 @@ export default function DuelPage() {
                       <span className="font-mono text-xs text-signal">ready</span>
                       <span className="mt-2 max-w-full truncate text-lg text-fg">{file.name}</span>
                       <span className="mt-1 text-sm text-faint">
-                        {(file.size / 1024).toFixed(0)} KB · click to swap
+                        {(file.size / 1024).toFixed(0)} KB · <span className="pointer-coarse:hidden">click</span>
+                        <span className="hidden pointer-coarse:inline">tap</span> to swap
                       </span>
                     </>
                   ) : (
@@ -227,8 +233,11 @@ export default function DuelPage() {
                       <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line-strong font-mono text-xl text-signal">
                         ↑
                       </span>
-                      <span className="mt-4 text-lg text-fg">Drop your résumé here</span>
-                      <span className="mt-1 text-sm text-faint">or click to browse · PDF up to {MAX_MB} MB</span>
+                      {/* Phones and tablets can't drag and drop, so they get tap wording instead */}
+                      <span className="mt-4 text-lg text-fg pointer-coarse:hidden">Drop your résumé here</span>
+                      <span className="mt-1 text-sm text-faint pointer-coarse:hidden">or click to browse · PDF up to {MAX_MB} MB</span>
+                      <span className="mt-4 hidden text-lg text-fg pointer-coarse:inline">Choose your résumé PDF</span>
+                      <span className="mt-1 hidden text-sm text-faint pointer-coarse:inline">Tap to browse · up to {MAX_MB} MB</span>
                     </>
                   )}
                 </button>
@@ -239,55 +248,68 @@ export default function DuelPage() {
                   className="hidden"
                   onChange={e => pick(e.target.files?.[0])}
                 />
-                {fileError && <p className="mt-3 text-sm text-red-300">{fileError}</p>}
+                {fileError && (
+                  <p role="alert" className="mt-3 text-sm text-red-300">
+                    {fileError}
+                  </p>
+                )}
 
-                <label className="mt-5 flex items-center gap-3 rounded-xl border border-line bg-bg/40 px-4 py-3 focus-within:border-signal/60">
+                <label className="mt-5 flex min-h-12 items-center gap-2 rounded-xl border border-line bg-bg/40 px-3 py-3 focus-within:border-signal/60 sm:gap-3 sm:px-4">
                   <GitHub className="h-4 w-4 shrink-0 text-faint" />
-                  <span className="font-mono text-sm text-faint">github.com/</span>
+                  {/* The prefix leaves too little room for typing below ~400px; the GitHub icon carries the meaning there */}
+                  <span className="hidden shrink-0 font-mono text-sm text-faint min-[400px]:inline">github.com/</span>
                   <input
                     value={github}
                     onChange={e => setGithub(e.target.value.trim())}
-                    placeholder="optional, we’ll read it from your résumé"
+                    placeholder="username (optional)"
                     aria-label="GitHub username (optional)"
+                    aria-describedby="github-hint"
                     maxLength={39}
-                    className="min-w-0 flex-1 bg-transparent text-base text-fg placeholder:text-faint focus:outline-none sm:text-sm"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="min-w-0 flex-1 bg-transparent text-base text-fg placeholder:text-faint focus:outline-none sm:text-sm pointer-coarse:text-base"
                   />
                 </label>
+                <p id="github-hint" className="mt-2 px-1 text-xs text-faint">
+                  Leave it blank and we’ll look for it on your résumé.
+                </p>
 
                 <button
                   onClick={start}
                   disabled={!file}
-                  className="group mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-fg px-6 py-3.5 text-sm font-medium text-bg transition-transform hover:scale-[1.02] disabled:scale-100 disabled:opacity-30"
+                  className="group mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-fg px-6 py-3.5 text-sm font-medium text-bg sm:mt-6 transition-transform hover:scale-[1.02] disabled:scale-100 disabled:opacity-30"
                 >
                   Enter the arena
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
-                <p className="mt-4 text-center text-xs leading-relaxed text-faint">
+                <p className="mt-4 text-pretty text-left text-xs leading-relaxed text-faint sm:text-center">
                   Every duel goes on the public wall below: your first name, last initial, headline, GitHub avatar and
                   scores. Your résumé itself is read in memory, then discarded; it is never saved or logged.
                 </p>
               </div>
 
               {/* The champion */}
-              <div className="card animate-slide-in-right relative flex flex-col overflow-hidden p-6 sm:p-8">
+              <div className="card animate-slide-in-right relative flex min-w-0 flex-col overflow-hidden p-5 sm:p-8">
                 <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-accent opacity-20 blur-3xl" />
                 <p className="relative font-mono text-[11px] uppercase tracking-[0.2em] text-accent">Reigning champion</p>
                 <div className="relative mt-5 flex items-center gap-4">
                   <Avatar name="Sachin Suresh" url={SACHIN_AVATAR} side="sachin" size={72} />
-                  <div>
-                    <h2 className="text-2xl font-medium text-fg">{portfolio.profile.name}</h2>
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-medium text-fg sm:text-2xl">{portfolio.profile.name}</h2>
                     <p className="text-sm text-muted">{portfolio.profile.status}</p>
                   </div>
                 </div>
-                <ul className="relative mt-6 space-y-2.5 text-sm text-muted">
+                <ul className="relative mt-5 space-y-2.5 text-sm text-muted sm:mt-6">
                   {['Agent runtime built from scratch', 'Contract analyzer with a 299-test CI', 'AI lending platform on AWS Bedrock'].map(x => (
                     <li key={x} className="flex gap-2.5">
-                      <span className="text-accent">↳</span>
-                      {x}
+                      <span className="shrink-0 text-accent">↳</span>
+                      <span className="min-w-0">{x}</span>
                     </li>
                   ))}
                 </ul>
-                <div className="relative mt-auto pt-8">
+                <div className="relative mt-auto pt-6 sm:pt-8">
                   <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-faint">The rounds</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {['Experience', 'Projects', 'Tech arsenal', 'Open source', 'Academics & awards'].map(r => (
@@ -300,13 +322,13 @@ export default function DuelPage() {
               </div>
             </section>
 
-            <section className="mt-16 grid gap-4 md:grid-cols-3">
+            <section className="mt-12 grid gap-4 sm:mt-16 md:grid-cols-3">
               {[
                 { t: 'Judged blind', b: 'The AI panel sees “Fighter A” and “Fighter B” in random order, with names removed, and one rubric for both.' },
                 { t: 'Evidence or it didn’t happen', b: 'Every score cites lines from the résumé. Quotes that aren’t really there get thrown out.' },
                 { t: 'Open source by the numbers', b: 'The GitHub round is pure arithmetic: stars, original repos, recent activity, languages.' },
               ].map(x => (
-                <div key={x.t} className="card p-6">
+                <div key={x.t} className="card p-5 sm:p-6">
                   <h3 className="font-medium text-fg">{x.t}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted">{x.b}</p>
                 </div>
