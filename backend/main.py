@@ -1,12 +1,13 @@
 import json
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Literal
 from rag_engine import PortfolioRAG
 from duel.pdf import MAX_BYTES
+from duel.history import DuelHistory
 from duel.service import DuelService, RateLimiter
 import os
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ load_dotenv()
 # Initialize RAG system lazily
 portfolio_rag = None
 duel_service = None
+duel_history = DuelHistory(os.getenv('DATABASE_URL'))
 duel_limiter = RateLimiter(limit=5, window_s=600)
 
 @asynccontextmanager
@@ -26,7 +28,13 @@ async def lifespan(app: FastAPI):
     global portfolio_rag, duel_service
     print("Initializing RAG system...")
     portfolio_rag = PortfolioRAG('portfolio_data.json')
-    duel_service = DuelService(portfolio_rag.portfolio_data, portfolio_rag.llm)
+    if duel_history.enabled:
+        try:
+            duel_history.ensure_schema()
+            print("Duel history database ready")
+        except Exception as e:  # the duel still works without the wall; don't fail boot
+            print(f"Duel history database unavailable: {type(e).__name__}")
+    duel_service = DuelService(portfolio_rag.portfolio_data, portfolio_rag.llm, history=duel_history)
     print("RAG system initialized successfully!")
     yield
 
@@ -103,10 +111,23 @@ async def duel(request: Request, file: UploadFile = File(...), github: str = For
     await file.close()
 
     def events():
-        for event in duel_service.run(data, github[:60]):
+        # Every duel goes on the public wall (headline facts only; the page tells visitors before they upload)
+        for event in duel_service.run(data, github[:60], share=True):
             yield json.dumps(event, ensure_ascii=False) + '\n'
 
     return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-store'})
+
+
+@app.get('/api/duels')
+def recent_duels(limit: int = Query(24, ge=1, le=50)):
+    """The public wall: recent duels plus Sachin's overall record."""
+    if not duel_history.enabled:
+        return {'enabled': False, 'duels': [], 'record': None}
+    try:
+        return duel_history.recent(limit)
+    except Exception as e:
+        print(f"Duel history read failed: {type(e).__name__}")
+        raise HTTPException(status_code=503, detail='The duel wall is unavailable right now.')
 
 
 @app.get('/')

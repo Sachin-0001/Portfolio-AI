@@ -184,6 +184,11 @@ export default function DuelArena({ result, onRematch }: { result: DuelResult; o
                 </h2>
               </div>
               <p className="mt-3 text-muted">{verdict.small}</p>
+              {result.shared && (
+                <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-signal/40 px-3 py-1 font-mono text-xs text-signal">
+                  ✓ added to the wall below
+                </p>
+              )}
 
               <div className="mx-auto mt-8 flex max-w-sm items-center justify-center gap-8 font-mono">
                 {(['challenger', 'sachin'] as Side[]).map(side => (

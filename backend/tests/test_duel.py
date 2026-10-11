@@ -351,3 +351,87 @@ def test_schema_slip_is_retried_once():
 
     out = complete_json(Flaky(), [], {}, name='resume_profile', model='m')
     assert out['name'] == 'Aarav Mehta' and len(attempts) == 2
+
+
+# ---------- public history ----------
+
+from duel.history import display_name, summarize  # noqa: E402
+
+
+class FakeHistory:
+    enabled = True
+
+    def __init__(self, fail=False):
+        self.rows, self.fail = [], fail
+
+    def record(self, row):
+        if self.fail:
+            raise RuntimeError('db down')
+        self.rows.append(row)
+        return f'id-{len(self.rows)}'
+
+    def recent(self, limit=24):
+        return {'enabled': True, 'duels': self.rows[:limit], 'record': {'wins': 0, 'losses': 0, 'draws': 0, 'total': len(self.rows)}}
+
+
+@pytest.mark.parametrize('full, shown', [
+    ('Aarav Mehta', 'Aarav M.'),
+    ('Priya', 'Priya'),
+    ('Ana María de la Cruz', 'Ana C.'),
+    ('   ', 'Challenger'),
+])
+def test_display_name_keeps_first_name_and_last_initial(full, shown):
+    assert display_name(full) == shown
+
+
+def test_summary_holds_headline_facts_only():
+    result = list(make_service().run(build()))[-1]['result']
+    result['fighters']['challenger']['headline'] = 'x' * 200
+    row = summarize(result)
+    assert row['challenger_name'] == 'Aarav M.'
+    assert len(row['challenger_headline']) == 90
+    assert row['challenger_github'] == 'aarav-mehta-demo'
+    flat = json.dumps(row)
+    for leak in ('evidence', 'commentary', 'announcer', 'learn', 'cut stock-outs', 'Mehta'):
+        assert leak not in flat
+    assert set(row['rounds'][0]) == {'key', 'title', 'challenger', 'sachin', 'winner'}
+
+
+def test_service_shares_only_when_asked():
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    assert list(svc.run(build()))[-1]['result']['shared'] is None
+    assert history.rows == []
+    assert list(svc.run(build(), share=True))[-1]['result']['shared'] == {'id': 'id-1'}
+    assert len(history.rows) == 1
+
+
+def test_database_failure_still_returns_the_result():
+    svc = make_service()
+    svc.history = FakeHistory(fail=True)
+    last = list(svc.run(build(), share=True))[-1]
+    assert last['stage'] == 'done' and last['result']['shared'] is None
+
+
+def test_api_always_shares_and_serves_the_public_wall(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import main
+
+    history = FakeHistory()
+    svc = make_service()
+    svc.history = history
+    monkeypatch.setattr(main, 'duel_service', svc)
+    monkeypatch.setattr(main, 'duel_history', history)
+    monkeypatch.setattr(main, 'duel_limiter', RateLimiter(limit=5, window_s=600))
+    client = TestClient(main.app)
+
+    r = client.post('/api/duel', files={'file': ('cv.pdf', build(), 'application/pdf')})  # no opt-in field
+    assert json.loads(r.text.splitlines()[-1])['result']['shared'] == {'id': 'id-1'}
+    wall = client.get('/api/duels?limit=5').json()
+    assert wall['record']['total'] == 1 and wall['duels'][0]['challenger_name'] == 'Aarav M.'
+    assert client.get('/api/duels?limit=500').status_code == 422
+
+    monkeypatch.setattr(main, 'duel_history', SimpleNamespace(enabled=False))
+    assert client.get('/api/duels').json() == {'enabled': False, 'duels': [], 'record': None}

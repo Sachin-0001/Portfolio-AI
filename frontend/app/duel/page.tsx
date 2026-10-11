@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import SiteNav from '@/components/SiteNav';
 import DuelArena from '@/components/duel/DuelArena';
 import { Avatar } from '@/components/duel/FighterCard';
+import DuelWall from '@/components/duel/DuelWall';
 import { ArrowRight, GitHub } from '@/components/Icons';
 import { portfolio } from '@/lib/portfolio';
 import type { DuelEvent, DuelResult } from '@/lib/duel';
@@ -99,7 +100,7 @@ function Loading({ state, fileName }: { state: State; fileName: string }) {
           );
         })}
       </ol>
-      <p className="mt-8 font-mono text-xs text-faint">{seconds}s · usually 10 to 30s · nothing is stored</p>
+      <p className="mt-8 font-mono text-xs text-faint">{seconds}s · usually 10 to 30s · your résumé is never stored</p>
     </div>
   );
 }
@@ -154,7 +155,10 @@ export default function DuelPage() {
 
       <main className="relative mx-auto max-w-6xl px-5 pb-28 pt-28 sm:px-8 md:pt-32">
         {state.kind === 'result' ? (
-          <DuelArena result={state.result} onRematch={reset} />
+          <>
+            <DuelArena result={state.result} onRematch={reset} />
+            <DuelWall refreshKey={1} highlightId={state.result.shared?.id} />
+          </>
         ) : state.kind === 'running' ? (
           <div className="pt-10">
             <Loading state={state} fileName={file?.name ?? ''} />
@@ -252,7 +256,8 @@ export default function DuelPage() {
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </button>
                 <p className="mt-4 text-center text-xs leading-relaxed text-faint">
-                  Your résumé is read in memory to run the duel, then discarded. Nothing is saved or logged.
+                  Every duel goes on the public wall below: your first name, last initial, headline, GitHub avatar and
+                  scores. Your résumé itself is read in memory, then discarded; it is never saved or logged.
                 </p>
               </div>
 
@@ -300,6 +305,8 @@ export default function DuelPage() {
                 </div>
               ))}
             </section>
+
+            <DuelWall />
           </>
         )}
       </main>

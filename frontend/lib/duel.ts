@@ -57,6 +57,28 @@ export interface DuelResult {
   learn: { challenger_from_sachin: string; sachin_from_challenger: string };
   skills: { shared: string[]; only_challenger: string[]; only_sachin: string[] };
   github_lookup: { username: string | null; found: boolean };
+  shared: { id: string } | null;
+}
+
+/** A duel as shown on the public wall: headline facts only (see backend/duel/history.py). */
+export interface PublicDuel {
+  id: string;
+  created_at: string;
+  challenger_name: string;
+  challenger_headline: string;
+  challenger_github: string | null;
+  challenger_avatar: string | null;
+  challenger_total: number;
+  sachin_total: number;
+  winner: Side | 'draw';
+  decision: 'ko' | 'decision' | 'draw';
+  rounds: { key: string; title: string; challenger: number; sachin: number; winner: Side | 'tie' }[];
+}
+
+export interface DuelWallData {
+  enabled: boolean;
+  duels: PublicDuel[];
+  record: { wins: number; losses: number; draws: number; total: number } | null;
 }
 
 export type DuelEvent =

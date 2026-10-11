@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from typing import Deque, Dict, Iterator, Optional
 
 from .github import GithubClient, find_github_username, valid_username
+from .history import DuelHistory, summarize
 from .judge import judge
 from .pdf import ResumeError, extract_resume
 from .profiles import Fighter, extract_fighter, sachin_fighter
@@ -40,8 +41,16 @@ class RateLimiter:
 
 
 class DuelService:
-    def __init__(self, portfolio_data: Dict, llm, github: Optional[GithubClient] = None, rng: Optional[random.Random] = None):
+    def __init__(
+        self,
+        portfolio_data: Dict,
+        llm,
+        github: Optional[GithubClient] = None,
+        rng: Optional[random.Random] = None,
+        history: Optional[DuelHistory] = None,
+    ):
         self.data = portfolio_data
+        self.history = history
         self.llm = llm
         self.github = github or GithubClient()
         self.rng = rng
@@ -73,7 +82,17 @@ class DuelService:
         f.github = self.github.stats(SACHIN_GITHUB)
         return f
 
-    def run(self, pdf_bytes: bytes, github_override: str = '') -> Iterator[Dict]:
+    def _share(self, result: Dict) -> Optional[Dict]:
+        """Puts a duel on the public wall. A database hiccup never costs the visitor their result."""
+        if not (self.history and self.history.enabled):
+            return None
+        try:
+            return {'id': self.history.record(summarize(result))}
+        except Exception as e:
+            log.warning('Could not save duel to history: %s', type(e).__name__)
+            return None
+
+    def run(self, pdf_bytes: bytes, github_override: str = '', share: bool = False) -> Iterator[Dict]:
         if self.llm is None:
             yield {'stage': 'error', 'message': "The duel judges are offline right now (the AI isn't configured). Try again later."}
             return
@@ -95,6 +114,7 @@ class DuelService:
                 self.llm, challenger, sachin, model=self.judge_model, fallback_model=self.fallback_model, rng=self.rng
             )
             result['github_lookup'] = {'username': username, 'found': challenger.github is not None}
+            result['shared'] = self._share(result) if share else None
             yield {'stage': 'done', 'result': result}
         except ResumeError as e:
             yield {'stage': 'error', 'message': str(e)}
