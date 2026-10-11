@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:data": "node -e \"require('fs').copyFileSync('../backend/portfolio_data.json','data/portfolio.json')\""
   },
   "dependencies": {
     "next": "16.0.10",
